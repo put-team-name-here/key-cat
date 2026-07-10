@@ -36,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        state.markAppTerminated()
         counter.flushPersistence()
     }
 
@@ -136,7 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = true
-        panel.hasShadow = true
+        panel.hasShadow = false
 
         // 우측 상단에 배치
         if let screen = NSScreen.main {
@@ -178,8 +179,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func togglePanel() {
         if panel.isVisible {
+            state.setFarmPanelVisible(false)
             panel.orderOut(nil)
         } else {
+            state.setFarmPanelVisible(true)
             panel.orderFrontRegardless()
         }
     }
