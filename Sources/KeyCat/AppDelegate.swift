@@ -55,8 +55,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - 메뉴바 상주
 
     private func setupStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = "🐾"
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if let button = statusItem.button {
+            button.title = ""
+            button.image = menuBarIcon()
+            button.imagePosition = .imageOnly
+            button.imageScaling = .scaleProportionallyDown
+        }
 
         menu = NSMenu()
         menu.delegate = self
@@ -106,6 +111,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func symbolImage(_ name: String, color: NSColor) -> NSImage? {
         NSImage(systemSymbolName: name, accessibilityDescription: nil)?
             .withSymbolConfiguration(.init(paletteColors: [color]))
+    }
+
+    private func menuBarIcon() -> NSImage? {
+        guard let url = Bundle.module.url(forResource: "menu_bar_cat", withExtension: "png", subdirectory: "gui"),
+              let image = NSImage(contentsOf: url) else { return nil }
+        image.size = NSSize(width: 20, height: 20)
+        image.isTemplate = false
+        image.accessibilityDescription = "KeyCat"
+        return image
     }
 
     // MARK: - 오버레이 창
