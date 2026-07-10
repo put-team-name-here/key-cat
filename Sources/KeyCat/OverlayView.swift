@@ -388,8 +388,8 @@ struct OverlayView: View {
             itemGrid {
                 switch state.selectedCodexCategory {
                 case .crops:
-                    cropEntry(name: "당근", sproutColor: fp.carrot)
-                    cropEntry(name: "양배추", sproutColor: fp.cabbage)
+                    cropEntry(name: "당근", imageResource: "carrot", fallbackColor: fp.carrot)
+                    cropEntry(name: "양배추", imageResource: "cabbage", fallbackColor: fp.cabbage)
                     ForEach(0..<6, id: \.self) { _ in emptySlot }
                 case .cats:
                     ForEach(codexCats) { cat in
@@ -470,21 +470,30 @@ struct OverlayView: View {
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
     }
 
-    private func cropEntry(name: String, sproutColor: Color) -> some View {
+    private func cropEntry(name: String, imageResource: String, fallbackColor: Color) -> some View {
         VStack(spacing: 4) {
-            sproutIcon(sproutColor)
+            cropImage(imageResource, fallbackColor: fallbackColor)
             Text(name)
                 .font(galmuriFont(10))
                 .foregroundColor(fp.border)
                 .multilineTextAlignment(.center)
-            Text("작물")
-                .font(galmuriFont(9))
-                .foregroundColor(fp.inkDim)
         }
-        .padding(.horizontal, 5).padding(.vertical, 7)
+        .padding(.horizontal, 5).padding(.vertical, 6)
         .frame(maxWidth: .infinity, minHeight: 74)
         .background(fp.cell)
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+    }
+
+    @ViewBuilder private func cropImage(_ resource: String, fallbackColor: Color) -> some View {
+        if let img = GuiAssetCache.image(resource) {
+            Image(nsImage: img)
+                .resizable()
+                .interpolation(.none)
+                .scaledToFit()
+                .frame(width: 40, height: 40)
+        } else {
+            sproutIcon(fallbackColor)
+        }
     }
 
     private func catEntry(_ cat: CodexCatEntry) -> some View {
