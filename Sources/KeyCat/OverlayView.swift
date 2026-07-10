@@ -244,7 +244,7 @@ struct OverlayView: View {
 
     private var farmField: some View {
         ZStack(alignment: .topTrailing) {
-            GrassBackground(tileSize: 45)
+            FarmFieldGrassView(field: state.farmField)
             fieldControls.padding(10)
         }
         .frame(height: 540)

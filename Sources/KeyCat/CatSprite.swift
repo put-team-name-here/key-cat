@@ -82,6 +82,17 @@ enum GroundCache {
     }
 }
 
+/// grounds/ 잔디 타일 PNG 한 칸을 그린다. 로드 실패 시 초록색으로 대체.
+@ViewBuilder func groundTile(_ name: String) -> some View {
+    if let img = GroundCache.image(name) {
+        Image(nsImage: img)
+            .resizable()
+            .interpolation(.none)   // 픽셀 아트라 보간 없이 또렷하게
+    } else {
+        RetroTheme.shared.harvestReady
+    }
+}
+
 /// 고양이 박스 잔디밭 배경. 짙은 잔디(grass_tile_2)와 꽃 잔디(grass_flower_tile_1)를
 /// 체커보드로 번갈아 깔아 "꽃이 드문드문 핀 잔디밭"을 만든다(시안 대각 줄무늬 대체).
 struct GrassBackground: View {
@@ -95,7 +106,7 @@ struct GrassBackground: View {
                 ForEach(0..<rows, id: \.self) { r in
                     HStack(spacing: 0) {
                         ForEach(0..<cols, id: \.self) { c in
-                            tile((r + c) % 2 == 0 ? "grass_tile_2" : "grass_flower_tile_1")
+                            groundTile((r + c) % 2 == 0 ? "grass_tile_2" : "grass_flower_tile_1")
                                 .frame(width: tileSize, height: tileSize)
                         }
                     }
@@ -105,15 +116,25 @@ struct GrassBackground: View {
         }
         .clipped()
     }
+}
 
-    @ViewBuilder private func tile(_ name: String) -> some View {
-        if let img = GroundCache.image(name) {
-            Image(nsImage: img)
-                .resizable()
-                .interpolation(.none)   // 픽셀 아트라 보간 없이 또렷하게
-        } else {
-            RetroTheme.shared.harvestReady   // 로드 실패 시 초록 대체
+/// 밭(확장 화면) 잔디 배경. 체커보드 대신 FarmFieldData 에 저장된 랜덤 배치를 그대로 그린다.
+struct FarmFieldGrassView: View {
+    let field: FarmFieldData
+    var tileSize: CGFloat = 45
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(0..<FarmFieldData.rows, id: \.self) { r in
+                HStack(spacing: 0) {
+                    ForEach(0..<FarmFieldData.cols, id: \.self) { c in
+                        groundTile(field.tiles[r * FarmFieldData.cols + c].grass.imageName)
+                            .frame(width: tileSize, height: tileSize)
+                    }
+                }
+            }
         }
+        .clipped()
     }
 }
 
