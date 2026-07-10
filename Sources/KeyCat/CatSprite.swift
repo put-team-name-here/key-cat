@@ -154,7 +154,10 @@ struct FarmFieldGrassView: View {
                                 }
                             }) {
                                 ZStack {
-                                    groundTile(tileState.isWatered ? "wet_ground" : "dry_ground")
+                                    let groundImageName = tileState.isWatered
+                                        ? "wet_ground"
+                                        : "dry_ground"
+                                    groundTile(groundImageName)
                                     if let imageName = tileState.growthImageName {
                                         groundTile(imageName)
                                     }
@@ -165,14 +168,65 @@ struct FarmFieldGrassView: View {
                             .buttonStyle(.plain)
                             .accessibilityLabel("밭 \(r + 1)행 \(c + 1)열")
                         } else {
-                            groundTile(field.tiles[r * FarmFieldData.cols + c].grass.imageName)
-                                .frame(width: tileSize, height: tileSize)
+                            let grass = field.tiles[r * FarmFieldData.cols + c].grass
+                            if let edge = FarmFieldData.dryGroundBoundaryEdge(row: r, column: c) {
+                                let adjacentTile = FarmFieldData.adjacentDryGroundTile(
+                                    for: edge,
+                                    boundaryRow: r,
+                                    boundaryColumn: c
+                                )
+                                let adjacentState = field.tiles[field.index(
+                                    row: adjacentTile.row,
+                                    column: adjacentTile.column
+                                )].state
+                                boundaryTile(edge: edge,
+                                             mirrored: (r + c).isMultiple(of: 2),
+                                             isWet: adjacentState.isWatered)
+                                    .frame(width: tileSize, height: tileSize)
+                                    .clipped()
+                            } else {
+                                groundTile(grass.imageName)
+                                    .frame(width: tileSize, height: tileSize)
+                            }
                         }
                     }
                 }
             }
         }
         .clipped()
+    }
+
+    /// dry_boundary_2 한 장을 방향별 회전·반전해 밭의 네 면을 감싼다.
+    @ViewBuilder private func boundaryTile(edge: FarmBoundaryEdge,
+                                           mirrored: Bool,
+                                           isWet: Bool) -> some View {
+        switch edge {
+        case .top:
+            groundTile(isWet ? "wet_boundary" : "dry_boundary_2")
+                .scaleEffect(x: mirrored ? -1 : 1, y: 1)
+        case .bottom:
+            groundTile(isWet ? "wet_boundary" : "dry_boundary_2")
+                .scaleEffect(x: mirrored ? -1 : 1, y: -1)
+        case .left:
+            groundTile(isWet ? "wet_boundary" : "dry_boundary_2")
+                .scaleEffect(x: mirrored ? -1 : 1, y: 1)
+                .rotationEffect(.degrees(-90))
+        case .right:
+            groundTile(isWet ? "wet_boundary" : "dry_boundary_2")
+                .scaleEffect(x: mirrored ? -1 : 1, y: 1)
+                .rotationEffect(.degrees(90))
+        case .topLeft:
+            groundTile(isWet ? "wet_boundary_line" : "dry_boundary_5")
+        case .topRight:
+            groundTile(isWet ? "wet_boundary_line" : "dry_boundary_5")
+                .scaleEffect(x: -1, y: 1)
+        case .bottomLeft:
+            groundTile(isWet ? "wet_boundary_line" : "dry_boundary_5")
+                .scaleEffect(x: 1, y: -1)
+        case .bottomRight:
+            groundTile(isWet ? "wet_boundary_line" : "dry_boundary_5")
+                .scaleEffect(x: -1, y: -1)
+        }
     }
 }
 
