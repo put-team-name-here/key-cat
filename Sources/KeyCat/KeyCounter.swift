@@ -6,9 +6,18 @@ import CoreGraphics
 final class KeyCounter: ObservableObject {
     @Published var count = 0
     @Published var permissionGranted = false
+    @Published var isPaused = false
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+
+    /// 기록 일시 정지/재개. tap 을 비활성화해 시스템 이벤트 콜백 자체를 멈춘다.
+    func togglePause() {
+        isPaused.toggle()
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: !isPaused)
+        }
+    }
 
     func start() {
         // 입력 모니터링 권한 사전 확인 및 요청 (macOS 10.15+)
