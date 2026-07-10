@@ -18,6 +18,14 @@ enum CodexCategory: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// 상점 내부 상품 카테고리.
+enum ShopCategory: String, CaseIterable, Identifiable {
+    case seeds = "씨앗"
+    case cats = "고양이"
+
+    var id: String { rawValue }
+}
+
 /// 상점에서 구매하고 창고에 보관하는 씨앗 종류.
 enum SeedKind: String, CaseIterable, Codable, Identifiable {
     case carrot
@@ -45,6 +53,13 @@ enum SeedKind: String, CaseIterable, Codable, Identifiable {
         case .cabbage: return "cabbage_growth_01"
         }
     }
+
+    var purchasePrice: Int {
+        switch self {
+        case .carrot: return 5
+        case .cabbage: return 15
+        }
+    }
 }
 
 /// 씨앗 종류별 보유 수량. 새 종류가 추가되어도 기존 저장 데이터와 호환된다.
@@ -56,6 +71,7 @@ struct SeedInventory: Codable {
     }
 
     mutating func add(_ seed: SeedKind, quantity: Int = 1) {
+        guard quantity > 0 else { return }
         quantities[seed, default: 0] += quantity
     }
 
@@ -81,6 +97,13 @@ enum CropKind: String, CaseIterable, Codable, Identifiable {
     }
 
     var imageName: String { rawValue }
+
+    var salePrice: Int {
+        switch self {
+        case .carrot: return 10
+        case .cabbage: return 35
+        }
+    }
 }
 
 struct CropInventory: Codable {
@@ -93,21 +116,50 @@ struct CropInventory: Codable {
     mutating func add(_ crop: CropKind) {
         quantities[crop, default: 0] += 1
     }
+
+    mutating func consume(_ crop: CropKind, quantity: Int = 1) -> Bool {
+        guard quantity > 0, count(of: crop) >= quantity else { return false }
+        quantities[crop, default: 0] -= quantity
+        return true
+    }
+}
+
+enum CatUnlockSource {
+    case harvest
+    case purchase
+}
+
+struct CatUnlockNotice: Identifiable {
+    let id = UUID()
+    let catID: String
+    let source: CatUnlockSource
 }
 
 /// 축소/확장 + 농장 자원 상태를 담는 가벼운 상태 객체
 final class AppState: ObservableObject {
     private static let cropGrowthInterval: TimeInterval = 5
     @Published var expanded = false
-    /// 보유 코인 (코인 획득 시스템 연결 전 자리표시)
-    @Published var coins = 0
+    /// 최초 30코인으로 시작하며 판매로 변경될 때마다 저장한다.
+    @Published private(set) var coins: Int {
+        didSet { UserDefaults.standard.set(coins, forKey: coinsKey) }
+    }
     /// 수확 가능 여부 (수확 시스템 연결 전 자리표시)
     @Published var harvestAvailable = false
 
     /// 확장 화면에서 선택한 하단 탭
     @Published var selectedFarmTab: FarmTab = .shop
+    /// 상점 화면에서 선택한 상품 카테고리
+    @Published var selectedShopCategory: ShopCategory = .seeds
     /// 도감 화면에서 선택한 내부 카테고리
     @Published var selectedCodexCategory: CodexCategory = .crops
+
+    /// 기본 턱시도, 상점 구매 또는 수확 보상으로 획득한 고양이 ID.
+    @Published private(set) var unlockedCatIDs: Set<String> {
+        didSet { saveUnlockedCats() }
+    }
+
+    /// 새 고양이를 여러 마리 연속 획득해도 알림을 순서대로 보여주기 위한 큐.
+    @Published private(set) var catUnlockNotices: [CatUnlockNotice] = []
 
     /// 축소 화면에서 순환 선택 중인 고양이 인덱스 (CatCatalog.all 기준)
     @Published var selectedCatIndex: Int
@@ -132,17 +184,30 @@ final class AppState: ObservableObject {
     }
 
     private let catKey = "selectedCatId"
+    private let coinsKey = "coins"
     private let seedInventoryKey = "seedInventory"
     private let cropInventoryKey = "cropInventory"
+    private let unlockedCatIDsKey = "unlockedCatIDs"
     private var growthTimer: Timer?
 
     init() {
-        // 마지막으로 고른 고양이를 id 로 복원. 없거나 못 찾으면 첫 번째.
+        if UserDefaults.standard.object(forKey: coinsKey) == nil {
+            coins = 30
+        } else {
+            coins = UserDefaults.standard.integer(forKey: coinsKey)
+        }
+        var initialUnlockedCatIDs = UserDefaults.standard.data(forKey: unlockedCatIDsKey)
+            .flatMap { try? JSONDecoder().decode(Set<String>.self, from: $0) }
+            ?? []
+        initialUnlockedCatIDs.insert("tuxedo")
+        unlockedCatIDs = initialUnlockedCatIDs
+        // 마지막으로 고른 보유 고양이를 복원. 없으면 기본 턱시도.
         if let savedId = UserDefaults.standard.string(forKey: catKey),
+           initialUnlockedCatIDs.contains(savedId),
            let idx = CatCatalog.all.firstIndex(where: { $0.id == savedId }) {
             selectedCatIndex = idx
         } else {
-            selectedCatIndex = 0
+            selectedCatIndex = CatCatalog.all.firstIndex(where: { $0.id == "tuxedo" }) ?? 0
         }
         if let data = UserDefaults.standard.data(forKey: seedInventoryKey),
            let inventory = try? JSONDecoder().decode(SeedInventory.self, from: data) {
@@ -186,15 +251,60 @@ final class AppState: ObservableObject {
     /// 현재 선택된 고양이 캐릭터
     var selectedCat: CatCharacter { CatCatalog.all[selectedCatIndex] }
 
-    /// "변경" 버튼: 다음 고양이로 순환하고 선택을 영속화
+    /// "변경" 버튼: 보유한 다음 고양이로 순환하고 선택을 영속화한다.
     func cycleCat() {
-        selectedCatIndex = (selectedCatIndex + 1) % CatCatalog.all.count
+        let availableCats = CatCatalog.all.filter { unlockedCatIDs.contains($0.id) }
+        guard !availableCats.isEmpty else { return }
+        let currentAvailableIndex = availableCats.firstIndex(where: { $0.id == selectedCat.id }) ?? -1
+        let nextCat = availableCats[(currentAvailableIndex + 1) % availableCats.count]
+        guard let nextIndex = CatCatalog.all.firstIndex(where: { $0.id == nextCat.id }) else { return }
+        selectedCatIndex = nextIndex
         UserDefaults.standard.set(selectedCat.id, forKey: catKey)
     }
 
-    /// 현재 상점 가격(0코인)으로 씨앗 한 개를 구매한다.
-    func purchase(_ seed: SeedKind) {
-        seedInventory.add(seed)
+    @discardableResult
+    func selectCat(id: String) -> Bool {
+        guard unlockedCatIDs.contains(id),
+              let index = CatCatalog.all.firstIndex(where: { $0.id == id })
+        else { return false }
+        selectedCatIndex = index
+        UserDefaults.standard.set(id, forKey: catKey)
+        return true
+    }
+
+    func isCatUnlocked(id: String) -> Bool {
+        unlockedCatIDs.contains(id)
+    }
+
+    /// 씨앗을 선택한 수량만큼 구매하고 총 가격을 코인에서 차감한다.
+    @discardableResult
+    func purchase(_ seed: SeedKind, quantity: Int = 1) -> Bool {
+        guard quantity > 0 else { return false }
+        let totalPrice = seed.purchasePrice * quantity
+        guard coins >= totalPrice else { return false }
+        seedInventory.add(seed, quantity: quantity)
+        coins -= totalPrice
+        return true
+    }
+
+    /// 고양이 상품 한 마리를 구매한다. 이미 보유했거나 코인이 부족하면 구매하지 않는다.
+    @discardableResult
+    func purchaseCat(id: String, unitPrice: Int) -> Bool {
+        guard unitPrice >= 0,
+              !unlockedCatIDs.contains(id),
+              coins >= unitPrice
+        else { return false }
+        var updatedIDs = unlockedCatIDs
+        updatedIDs.insert(id)
+        unlockedCatIDs = updatedIDs
+        coins -= unitPrice
+        catUnlockNotices.append(CatUnlockNotice(catID: id, source: .purchase))
+        return true
+    }
+
+    func dismissCatUnlockNotice() {
+        guard !catUnlockNotices.isEmpty else { return }
+        catUnlockNotices.removeFirst()
     }
 
     func seedCount(_ seed: SeedKind) -> Int {
@@ -203,6 +313,16 @@ final class AppState: ObservableObject {
 
     func cropCount(_ crop: CropKind) -> Int {
         cropInventory.count(of: crop)
+    }
+
+    /// 창고의 작물을 선택한 수량만큼 판매하고 판매 대금을 코인에 더한다.
+    @discardableResult
+    func sell(_ crop: CropKind, quantity: Int) -> Bool {
+        var updatedInventory = cropInventory
+        guard updatedInventory.consume(crop, quantity: quantity) else { return false }
+        cropInventory = updatedInventory
+        coins += crop.salePrice * quantity
+        return true
     }
 
     /// 빈 밭 타일에 씨앗 하나를 심고 창고 수량을 차감한다.
@@ -264,6 +384,7 @@ final class AppState: ObservableObject {
         var updatedInventory = cropInventory
         updatedInventory.add(crop)
         cropInventory = updatedInventory
+        unlockHarvestCatsIfNeeded()
         var updatedField = farmField
         updatedField.tiles[index].state = .empty
         updatedField.tiles[index].wateredAt = nil
@@ -278,6 +399,34 @@ final class AppState: ObservableObject {
     private func saveCropInventory() {
         guard let data = try? JSONEncoder().encode(cropInventory) else { return }
         UserDefaults.standard.set(data, forKey: cropInventoryKey)
+    }
+
+    private func saveUnlockedCats() {
+        guard let data = try? JSONEncoder().encode(unlockedCatIDs) else { return }
+        UserDefaults.standard.set(data, forKey: unlockedCatIDsKey)
+    }
+
+    /// 작물 한 개를 수확할 때 치즈·그레이는 각각 20%, 오드아이는 0.1% 확률로 획득한다.
+    private func unlockHarvestCatsIfNeeded() {
+        var updatedIDs = unlockedCatIDs
+        var newlyUnlockedIDs: [String] = []
+        let dropRates: [(catID: String, probability: Double)] = [
+            ("cheese", 0.2),
+            ("gray", 0.2),
+            ("oddeye", 0.001),
+        ]
+        for drop in dropRates where !updatedIDs.contains(drop.catID) {
+            if Double.random(in: 0..<1) < drop.probability {
+                updatedIDs.insert(drop.catID)
+                newlyUnlockedIDs.append(drop.catID)
+            }
+        }
+        if updatedIDs != unlockedCatIDs {
+            unlockedCatIDs = updatedIDs
+            catUnlockNotices.append(contentsOf: newlyUnlockedIDs.map {
+                CatUnlockNotice(catID: $0, source: .harvest)
+            })
+        }
     }
 
     private func startGrowthTimer() {
