@@ -14,6 +14,18 @@ enum GuiAssetCache {
     }
 }
 
+/// Simple triangle shape used for pixel-style cat ears.
+struct Triangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.closeSubpath()
+        return path
+    }
+}
+
 /// 오버레이 창 내용. stt-spike RHODES 콘솔 테마 이식.
 /// 축소(작은 위젯) / 확장(농장 콘솔) 두 화면을 state.expanded 로 전환.
 struct OverlayView: View {
@@ -299,33 +311,117 @@ struct OverlayView: View {
         }
     }
 
-    // MARK: 인벤토리 - "씨앗" 라벨 + 4열 그리드(씨앗 2종 + 빈 칸 6개)
+    // MARK: 인벤토리/도감 - 하단 탭에 따라 상점과 같은 틀로 전환
 
     private var inventorySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("씨앗")
-                .font(galmuriFont(14))
-                .foregroundColor(fp.border)
-                .padding(.horizontal, 12).padding(.vertical, 5)
-                .background(fp.cell)
-                .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+            inventoryContent
+        }
+        .padding(12)
+        .frame(height: 218, alignment: .topLeading)
+    }
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
+    @ViewBuilder private var inventoryContent: some View {
+        switch state.selectedFarmTab {
+        case .shop:
+            shopContent
+        case .codex:
+            codexContent
+        case .storage:
+            placeholderContent(title: "창고", message: "아직 비어 있어요")
+        case .log:
+            placeholderContent(title: "기록", message: "기록 준비 중")
+        }
+    }
+
+    private var shopContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            categoryPill("씨앗")
+            itemGrid {
                 seedItem(name: "당근 씨앗", sproutColor: fp.carrot)
                 seedItem(name: "양배추 씨앗", sproutColor: fp.cabbage)
                 ForEach(0..<6, id: \.self) { _ in emptySlot }
             }
         }
-        .padding(12)
+    }
+
+    private var codexContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                ForEach(CodexCategory.allCases) { category in
+                    codexCategoryButton(category)
+                }
+            }
+
+            itemGrid {
+                switch state.selectedCodexCategory {
+                case .crops:
+                    cropEntry(name: "당근", sproutColor: fp.carrot)
+                    cropEntry(name: "양배추", sproutColor: fp.cabbage)
+                    ForEach(0..<6, id: \.self) { _ in emptySlot }
+                case .cats:
+                    ForEach(CatCatalog.all) { cat in
+                        catEntry(cat)
+                    }
+                    ForEach(0..<max(0, 8 - CatCatalog.all.count), id: \.self) { _ in emptySlot }
+                }
+            }
+        }
+    }
+
+    private func placeholderContent(title: String, message: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            categoryPill(title)
+            itemGrid {
+                VStack(spacing: 6) {
+                    Text(message)
+                        .font(galmuriFont(10))
+                        .foregroundColor(fp.border)
+                        .multilineTextAlignment(.center)
+                    Text("SOON")
+                        .font(galmuriFont(9))
+                        .foregroundColor(fp.inkDim)
+                }
+                .padding(.horizontal, 5).padding(.vertical, 7)
+                .frame(maxWidth: .infinity, minHeight: 74)
+                .background(fp.cell)
+                .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+                ForEach(0..<7, id: \.self) { _ in emptySlot }
+            }
+        }
+    }
+
+    private func categoryPill(_ title: String) -> some View {
+        Text(title)
+            .font(galmuriFont(14))
+            .foregroundColor(fp.border)
+            .padding(.horizontal, 12).padding(.vertical, 5)
+            .background(fp.cell)
+            .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+    }
+
+    private func codexCategoryButton(_ category: CodexCategory) -> some View {
+        let active = state.selectedCodexCategory == category
+        return Button(action: { state.selectedCodexCategory = category }) {
+            Text(category.rawValue)
+                .font(galmuriFont(14))
+                .foregroundColor(active ? fp.primaryText : fp.border)
+                .padding(.horizontal, 12).padding(.vertical, 5)
+                .background(active ? fp.primary : fp.cell)
+                .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func itemGrid<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
+            content()
+        }
     }
 
     private func seedItem(name: String, sproutColor: Color) -> some View {
         VStack(spacing: 3) {
-            HStack(spacing: 3) {
-                RoundedRectangle(cornerRadius: 3).fill(sproutColor).frame(width: 6, height: 8)
-                RoundedRectangle(cornerRadius: 3).fill(sproutColor).frame(width: 6, height: 10)
-            }
-            .frame(height: 16)
+            sproutIcon(sproutColor)
             Text(name)
                 .font(galmuriFont(9)).foregroundColor(fp.border)
                 .multilineTextAlignment(.center)
@@ -337,9 +433,62 @@ struct OverlayView: View {
             }
         }
         .padding(.horizontal, 5).padding(.vertical, 7)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, minHeight: 74)
         .background(fp.cell)
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+    }
+
+    private func cropEntry(name: String, sproutColor: Color) -> some View {
+        VStack(spacing: 4) {
+            sproutIcon(sproutColor)
+            Text(name)
+                .font(galmuriFont(10))
+                .foregroundColor(fp.border)
+                .multilineTextAlignment(.center)
+            Text("작물")
+                .font(galmuriFont(9))
+                .foregroundColor(fp.inkDim)
+        }
+        .padding(.horizontal, 5).padding(.vertical, 7)
+        .frame(maxWidth: .infinity, minHeight: 74)
+        .background(fp.cell)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+    }
+
+    private func catEntry(_ cat: CatCharacter) -> some View {
+        VStack(spacing: 4) {
+            catIcon
+            Text(cat.name)
+                .font(galmuriFont(10))
+                .foregroundColor(fp.border)
+                .multilineTextAlignment(.center)
+            Text("고양이")
+                .font(galmuriFont(9))
+                .foregroundColor(fp.inkDim)
+        }
+        .padding(.horizontal, 5).padding(.vertical, 7)
+        .frame(maxWidth: .infinity, minHeight: 74)
+        .background(fp.cell)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+    }
+
+    private func sproutIcon(_ color: Color) -> some View {
+        HStack(spacing: 3) {
+            RoundedRectangle(cornerRadius: 3).fill(color).frame(width: 6, height: 8)
+            RoundedRectangle(cornerRadius: 3).fill(color).frame(width: 6, height: 10)
+        }
+        .frame(height: 16)
+    }
+
+    private var catIcon: some View {
+        ZStack(alignment: .top) {
+            HStack(spacing: 10) {
+                Triangle().fill(fp.inkDim).frame(width: 8, height: 8)
+                Triangle().fill(fp.inkDim).frame(width: 8, height: 8)
+            }
+            Circle().fill(fp.inkDim).frame(width: 20, height: 20).padding(.top, 4)
+        }
+        .frame(height: 24)
     }
 
     private var emptySlot: some View {
@@ -349,28 +498,30 @@ struct OverlayView: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(fp.inkDim)
         }
-        .aspectRatio(1, contentMode: .fit)
+        .frame(maxWidth: .infinity, minHeight: 74)
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
     }
 
-    // MARK: 하단 탭 - 상점/창고/도감/기록 (표시만, 전환 기능은 추후 개발)
+    // MARK: 하단 탭 - 상점/창고/도감/기록 전환
 
     private var tabBar: some View {
-        let tabs = ["상점", "창고", "도감", "기록"]
-        return VStack(spacing: 0) {
+        VStack(spacing: 0) {
             Rectangle().fill(fp.border).frame(height: 3)
             HStack(spacing: 0) {
-                ForEach(Array(tabs.enumerated()), id: \.offset) { i, tab in
-                    let active = i == 0
-                    Text(tab)
-                        .font(galmuriFont(14))
-                        .foregroundColor(active ? fp.primaryText : fp.border)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(active ? fp.primary : fp.cell)
-                        .overlay(alignment: .trailing) {
-                            Rectangle().fill(fp.border).frame(width: 2)
-                        }
+                ForEach(FarmTab.allCases) { tab in
+                    let active = state.selectedFarmTab == tab
+                    Button(action: { state.selectedFarmTab = tab }) {
+                        Text(tab.rawValue)
+                            .font(galmuriFont(14))
+                            .foregroundColor(active ? fp.primaryText : fp.border)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(active ? fp.primary : fp.cell)
+                            .overlay(alignment: .trailing) {
+                                Rectangle().fill(fp.border).frame(width: 2)
+                            }
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
