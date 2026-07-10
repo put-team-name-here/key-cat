@@ -154,7 +154,10 @@ struct FarmFieldGrassView: View {
                                 }
                             }) {
                                 ZStack {
-                                    groundTile(tileState.isWatered ? "wet_ground" : "dry_ground")
+                                    let groundImageName = tileState.isWatered
+                                        ? "wet_ground"
+                                        : "dry_ground"
+                                    groundTile(groundImageName)
                                     if let imageName = tileState.growthImageName {
                                         groundTile(imageName)
                                     }
@@ -165,14 +168,73 @@ struct FarmFieldGrassView: View {
                             .buttonStyle(.plain)
                             .accessibilityLabel("밭 \(r + 1)행 \(c + 1)열")
                         } else {
-                            groundTile(field.tiles[r * FarmFieldData.cols + c].grass.imageName)
-                                .frame(width: tileSize, height: tileSize)
+                            let grass = field.tiles[r * FarmFieldData.cols + c].grass
+                            if let edge = FarmFieldData.dryGroundBoundaryEdge(row: r, column: c) {
+                                let adjacentTile = FarmFieldData.adjacentDryGroundTile(
+                                    for: edge,
+                                    boundaryRow: r,
+                                    boundaryColumn: c
+                                )
+                                let adjacentState = field.tiles[field.index(
+                                    row: adjacentTile.row,
+                                    column: adjacentTile.column
+                                )].state
+                                boundaryTile(edge: edge,
+                                             mirrored: (r + c).isMultiple(of: 2),
+                                             isWet: adjacentState.isWatered,
+                                             hasFlowers: grass == .flower)
+                                    .frame(width: tileSize, height: tileSize)
+                                    .clipped()
+                            } else {
+                                groundTile(grass.imageName)
+                                    .frame(width: tileSize, height: tileSize)
+                            }
                         }
                     }
                 }
             }
         }
         .clipped()
+    }
+
+    /// dry_boundary_2 한 장을 방향별 회전·반전해 밭의 네 면을 감싼다.
+    @ViewBuilder private func boundaryTile(edge: FarmBoundaryEdge,
+                                           mirrored: Bool,
+                                           isWet: Bool,
+                                           hasFlowers: Bool) -> some View {
+        let sideImage = isWet
+            ? (hasFlowers ? "wet_boundary_flower" : "wet_boundary")
+            : (hasFlowers ? "dry_boundary_flower" : "dry_boundary_2")
+        let cornerImage = isWet
+            ? (hasFlowers ? "wet_boundary_line_flower" : "wet_boundary_line")
+            : (hasFlowers ? "dry_boundary_line_flower" : "dry_boundary_5")
+        switch edge {
+        case .top:
+            groundTile(sideImage)
+                .scaleEffect(x: mirrored ? -1 : 1, y: 1)
+        case .bottom:
+            groundTile(sideImage)
+                .scaleEffect(x: mirrored ? -1 : 1, y: -1)
+        case .left:
+            groundTile(sideImage)
+                .scaleEffect(x: mirrored ? -1 : 1, y: 1)
+                .rotationEffect(.degrees(-90))
+        case .right:
+            groundTile(sideImage)
+                .scaleEffect(x: mirrored ? -1 : 1, y: 1)
+                .rotationEffect(.degrees(90))
+        case .topLeft:
+            groundTile(cornerImage)
+        case .topRight:
+            groundTile(cornerImage)
+                .scaleEffect(x: -1, y: 1)
+        case .bottomLeft:
+            groundTile(cornerImage)
+                .scaleEffect(x: 1, y: -1)
+        case .bottomRight:
+            groundTile(cornerImage)
+                .scaleEffect(x: -1, y: -1)
+        }
     }
 }
 

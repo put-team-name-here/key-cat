@@ -12,6 +12,17 @@ enum FarmWorkKind: Equatable {
     case fetchingSeeds
 }
 
+enum FarmBoundaryEdge {
+    case top
+    case bottom
+    case left
+    case right
+    case topLeft
+    case topRight
+    case bottomLeft
+    case bottomRight
+}
+
 struct FarmWorkTask: Equatable {
     let kind: FarmWorkKind
     let tile: FarmTileCoordinate
@@ -108,6 +119,45 @@ struct FarmFieldData: Codable {
         let startRow = rows - dryGroundBottomMargin - dryGroundSize
         return column >= startColumn && column < startColumn + dryGroundSize
             && row >= startRow && row < startRow + dryGroundSize
+    }
+
+    /// 4×4 밭 바깥에서 상·하·좌·우로 바로 맞닿는 경계 타일 방향.
+    static func dryGroundBoundaryEdge(row: Int, column: Int) -> FarmBoundaryEdge? {
+        let startColumn = (cols - dryGroundSize) / 2
+        let startRow = rows - dryGroundBottomMargin - dryGroundSize
+        let endColumn = startColumn + dryGroundSize - 1
+        let endRow = startRow + dryGroundSize - 1
+
+        if row == startRow - 1, column == startColumn - 1 { return .topLeft }
+        if row == startRow - 1, column == endColumn + 1 { return .topRight }
+        if row == endRow + 1, column == startColumn - 1 { return .bottomLeft }
+        if row == endRow + 1, column == endColumn + 1 { return .bottomRight }
+        if row == startRow - 1, column >= startColumn, column <= endColumn { return .top }
+        if row == endRow + 1, column >= startColumn, column <= endColumn { return .bottom }
+        if column == startColumn - 1, row >= startRow, row <= endRow { return .left }
+        if column == endColumn + 1, row >= startRow, row <= endRow { return .right }
+        return nil
+    }
+
+    /// 경계 타일 바로 안쪽에서 맞닿는 밭 타일 좌표를 반환한다.
+    static func adjacentDryGroundTile(for edge: FarmBoundaryEdge,
+                                      boundaryRow row: Int,
+                                      boundaryColumn column: Int) -> FarmTileCoordinate {
+        let startColumn = (cols - dryGroundSize) / 2
+        let startRow = rows - dryGroundBottomMargin - dryGroundSize
+        let endColumn = startColumn + dryGroundSize - 1
+        let endRow = startRow + dryGroundSize - 1
+
+        switch edge {
+        case .top: return FarmTileCoordinate(row: startRow, column: column)
+        case .bottom: return FarmTileCoordinate(row: endRow, column: column)
+        case .left: return FarmTileCoordinate(row: row, column: startColumn)
+        case .right: return FarmTileCoordinate(row: row, column: endColumn)
+        case .topLeft: return FarmTileCoordinate(row: startRow, column: startColumn)
+        case .topRight: return FarmTileCoordinate(row: startRow, column: endColumn)
+        case .bottomLeft: return FarmTileCoordinate(row: endRow, column: startColumn)
+        case .bottomRight: return FarmTileCoordinate(row: endRow, column: endColumn)
+        }
     }
 
     static func randomLayout() -> FarmFieldData {
