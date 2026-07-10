@@ -7,4 +7,28 @@ final class AppState: ObservableObject {
     @Published var coins = 0
     /// 수확 가능 여부 (수확 시스템 연결 전 자리표시)
     @Published var harvestAvailable = false
+
+    /// 축소 화면에서 순환 선택 중인 고양이 인덱스 (CatCatalog.all 기준)
+    @Published var selectedCatIndex: Int
+
+    private let catKey = "selectedCatId"
+
+    init() {
+        // 마지막으로 고른 고양이를 id 로 복원. 없거나 못 찾으면 첫 번째.
+        if let savedId = UserDefaults.standard.string(forKey: catKey),
+           let idx = CatCatalog.all.firstIndex(where: { $0.id == savedId }) {
+            selectedCatIndex = idx
+        } else {
+            selectedCatIndex = 0
+        }
+    }
+
+    /// 현재 선택된 고양이 캐릭터
+    var selectedCat: CatCharacter { CatCatalog.all[selectedCatIndex] }
+
+    /// "변경" 버튼: 다음 고양이로 순환하고 선택을 영속화
+    func cycleCat() {
+        selectedCatIndex = (selectedCatIndex + 1) % CatCatalog.all.count
+        UserDefaults.standard.set(selectedCat.id, forKey: catKey)
+    }
 }

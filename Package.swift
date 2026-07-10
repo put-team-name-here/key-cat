@@ -7,7 +7,12 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "KeyCat",
-            path: "Sources/KeyCat"
+            path: "Sources/KeyCat",
+            resources: [
+                .copy("Resources/cats"),
+                .copy("Resources/fonts"),
+                .copy("Resources/grounds"),
+            ]
         )
     ]
 )

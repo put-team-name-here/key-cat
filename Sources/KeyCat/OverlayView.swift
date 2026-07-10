@@ -6,8 +6,11 @@ struct OverlayView: View {
     @ObservedObject var counter: KeyCounter
     @ObservedObject var state: AppState
     var onToggleSize: () -> Void
+    /// "설정" 버튼: 메뉴바 NSMenu 를 popUp (AppDelegate 배선)
+    var onOpenSettings: () -> Void = {}
 
     private let t = Theme.rhodes
+    private let rt = RetroTheme.shared
 
     var body: some View {
         Group {
@@ -19,38 +22,157 @@ struct OverlayView: View {
         }
     }
 
-    // MARK: - 축소 화면 (작은 위젯)
+    // MARK: - 축소 화면 (레트로 픽셀 카드, 시안 축소화면.dc.html)
 
+    /// 카드 하드 그림자(5px5px). 투명 패널 안에서 그림자용 여백을 확보한다.
     private var collapsedView: some View {
-        ZStack(alignment: .topTrailing) {
-            VStack(alignment: .leading, spacing: 12) {
-                logoHeader(compact: true)
+        HStack(alignment: .top, spacing: 14) {
+            catColumn
+            statsColumn
+        }
+        .padding(14)
+        .frame(width: 352, alignment: .topLeading)
+        .background(rt.cardBg)
+        .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 3))
+        .background(
+            Rectangle()
+                .fill(Color.black.opacity(0.28))
+                .offset(x: 5, y: 5)
+        )
+        .padding(.trailing, 5)
+        .padding(.bottom, 5)
+        .fixedSize()
+    }
 
-                // 고양이 캐릭터 자리
-                placeholderBox(height: 62)
-                    .overlay(Text("고양이\n캐릭터")
-                        .font(.system(size: 11))
-                        .foregroundColor(t.textDim)
-                        .multilineTextAlignment(.center))
+    // MARK: 좌측 - 고양이 박스 + "변경" 버튼
 
-                statTile(ko: "오늘 타자 수", en: "KEYS TODAY", value: "\(counter.count)")
+    private var catColumn: some View {
+        ZStack(alignment: .bottomTrailing) {
+            ZStack {
+                GrassBackground()
+                WalkingCat(character: state.selectedCat, spriteSize: 46, fps: 9)
+            }
+            .frame(width: 118, height: 118)
+            .clipped()
+            .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 3))
 
-                Text(statusMessage)
-                    .font(monoFont(9))
-                    .tracking(0.5)
-                    .foregroundColor(counter.permissionGranted ? t.textFaint : t.bad)
-                    .lineSpacing(2)
+            Button(action: state.cycleCat) {
+                Text("변경")
+                    .font(galmuriFont(12))
+                    .foregroundColor(rt.ink)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(rt.yellow))
+                    .overlay(Circle().strokeBorder(rt.ink, lineWidth: 3))
+                    .shadow(color: Color.black.opacity(0.25), radius: 0, x: 2, y: 2)
+            }
+            .buttonStyle(.plain)
+            .offset(x: 10, y: 10)
+        }
+        .frame(width: 118, height: 118, alignment: .topLeading)
+    }
 
+    // MARK: 우측 - 상단 버튼행 + 정보 타일 3종
+
+    private var statsColumn: some View {
+        VStack(spacing: 7) {
+            // 확장 아이콘 + 설정 버튼
+            HStack(spacing: 6) {
+                Spacer(minLength: 0)
+                Button(action: onToggleSize) {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(rt.ink)
+                        .frame(width: 15, height: 15)
+                        .padding(.horizontal, 7)
+                        .frame(maxHeight: .infinity)
+                        .background(rt.panel)
+                        .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 3))
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onOpenSettings) {
+                    Text("설정")
+                        .font(galmuriFont(13))
+                        .foregroundColor(rt.text)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(rt.panel)
+                        .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 3))
+                }
+                .buttonStyle(.plain)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+
+            // 기록한 글자 수
+            infoTile {
+                keyboardGlyph
+                Spacer(minLength: 0)
+                Text("\(counter.count)자")
+                    .font(galmuriFont(14)).foregroundColor(rt.text)
+            }
+
+            // 보유 코인
+            infoTile {
+                coinGlyph
+                Spacer(minLength: 0)
+                Text("\(state.coins)")
+                    .font(galmuriFont(14)).foregroundColor(rt.text)
+            }
+
+            // 수확 상태
+            infoTile {
+                Rectangle()
+                    .fill(state.harvestAvailable ? rt.harvestReady : rt.harvestWait)
+                    .frame(width: 11, height: 11)
+                    .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 2))
+                Text(state.harvestAvailable ? "수확할 수 있어요!" : "아직 자라는 중")
+                    .font(galmuriFont(13)).foregroundColor(rt.text)
                 Spacer(minLength: 0)
             }
-            .padding(16)
-
-            iconButton(system: "arrow.up.left.and.arrow.down.right", action: onToggleSize)
-                .padding(12)
         }
-        .background(t.panel)
-        .overlay(Rectangle().stroke(t.border, lineWidth: 1))
-        .cornerBrackets([.tl, .br], color: t.accent)
+        .frame(maxWidth: .infinity)
+    }
+
+    /// 정보 타일: panel 배경 + ink 3px 테두리 + 좌측 아이콘 행
+    private func infoTile<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 8, content: content)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 8)
+            .background(rt.panel)
+            .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 3))
+    }
+
+    /// 핑크 키보드 픽셀 아이콘 (20x18, 키 3개)
+    private var keyboardGlyph: some View {
+        ZStack(alignment: .topLeading) {
+            Rectangle().fill(rt.pink)
+            pixel(x: 3, y: 4, w: 4, h: 4, color: rt.pinkKey)
+            pixel(x: 10, y: 4, w: 4, h: 4, color: rt.pinkKey)
+            pixel(x: 3, y: 10, w: 11, h: 4, color: rt.pinkKey)
+        }
+        .frame(width: 20, height: 18)
+        .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 2))
+    }
+
+    /// 노란 코인 픽셀 아이콘 (18x18 원, 눈2 + 입)
+    private var coinGlyph: some View {
+        ZStack(alignment: .topLeading) {
+            Circle().fill(rt.yellow)
+            pixel(x: 4, y: 5, w: 3, h: 4, color: rt.ink)
+            pixel(x: 10, y: 5, w: 3, h: 4, color: rt.ink)
+            pixel(x: 6, y: 10, w: 6, h: 3, color: rt.ink)
+        }
+        .frame(width: 18, height: 18)
+        .overlay(Circle().strokeBorder(rt.ink, lineWidth: 2))
+    }
+
+    /// topLeading 기준 오프셋 픽셀 사각형 (시안 절대좌표 재현)
+    private func pixel(x: CGFloat, y: CGFloat, w: CGFloat, h: CGFloat, color: Color) -> some View {
+        Rectangle()
+            .fill(color)
+            .frame(width: w, height: h)
+            .offset(x: x, y: y)
     }
 
     // MARK: - 확장 화면 (농장 콘솔)
@@ -280,20 +402,6 @@ struct OverlayView: View {
         }
     }
 
-    private func logoHeader(compact: Bool) -> some View {
-        HStack(spacing: 8) {
-            logoMark
-            VStack(alignment: .leading, spacing: 1) {
-                Text("타이핑 농장")
-                    .font(.system(size: 13, weight: .heavy))
-                    .foregroundColor(t.text)
-                Text("TYPING · FARM")
-                    .font(monoFont(8)).tracking(1.5)
-                    .foregroundColor(t.textDim)
-            }
-        }
-    }
-
     private func iconButton(system: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: system)
@@ -325,14 +433,6 @@ struct OverlayView: View {
         .overlay(Rectangle().stroke(t.border, lineWidth: 1))
     }
 
-    private func placeholderBox(height: CGFloat) -> some View {
-        Rectangle()
-            .fill(t.bg2)
-            .frame(maxWidth: .infinity)
-            .frame(height: height)
-            .overlay(Rectangle().stroke(t.border, lineWidth: 1))
-    }
-
     private func shopItem(name: String) -> some View {
         VStack(spacing: 4) {
             Text(name).font(.system(size: 12, weight: .semibold)).foregroundColor(t.text)
@@ -348,14 +448,5 @@ struct OverlayView: View {
             .fill(t.bg2)
             .frame(maxWidth: .infinity, minHeight: 58)
             .overlay(Rectangle().stroke(t.border, lineWidth: 1))
-    }
-
-    // MARK: - 공용
-
-    private var statusMessage: String {
-        if !counter.permissionGranted {
-            return "⚠ 입력 모니터링 권한 필요\n설정 허용 후 자동 연결"
-        }
-        return counter.count == 0 ? "아무 앱에서나 타이핑" : "실시간 카운트 중"
     }
 }
