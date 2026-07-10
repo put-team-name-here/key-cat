@@ -110,7 +110,6 @@ struct OverlayView: View {
 
     // MARK: - 축소 화면 (레트로 픽셀 카드, 시안 축소화면.dc.html)
 
-    /// 카드 하드 그림자(5px5px). 투명 패널 안에서 그림자용 여백을 확보한다.
     private var collapsedView: some View {
         HStack(alignment: .top, spacing: 14) {
             catColumn
@@ -120,13 +119,6 @@ struct OverlayView: View {
         .frame(width: 352, alignment: .topLeading)
         .background(rt.cardBg)
         .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 3))
-        .background(
-            Rectangle()
-                .fill(Color.black.opacity(0.28))
-                .offset(x: 5, y: 5)
-        )
-        .padding(.trailing, 5)
-        .padding(.bottom, 5)
         .fixedSize()
     }
 
@@ -197,16 +189,6 @@ struct OverlayView: View {
                     .font(galmuriFont(14)).foregroundColor(rt.text)
             }
 
-            // 수확 상태
-            infoTile {
-                Rectangle()
-                    .fill(state.harvestAvailable ? rt.harvestReady : rt.harvestWait)
-                    .frame(width: 11, height: 11)
-                    .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 2))
-                Text(state.harvestAvailable ? "수확할 수 있어요!" : "아직 자라는 중")
-                    .font(galmuriFont(13)).foregroundColor(rt.text)
-                Spacer(minLength: 0)
-            }
         }
         .frame(maxWidth: .infinity)
     }
@@ -338,13 +320,6 @@ struct OverlayView: View {
             }
         }
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
-        .background(
-            Rectangle()
-                .fill(Color.black.opacity(0.3))
-                .offset(x: 6, y: 6)
-        )
-        .padding(.trailing, 6)
-        .padding(.bottom, 6)
         .fixedSize()
     }
 
@@ -877,6 +852,11 @@ struct OverlayView: View {
                 quantityButton(systemName: "plus", enabled: purchaseQuantity < maxAffordableQuantity) {
                     purchaseQuantity += 1
                 }
+                quantityMaxButton(
+                    enabled: state.coins >= seed.purchasePrice && purchaseQuantity < maxAffordableQuantity
+                ) {
+                    purchaseQuantity = maxAffordableQuantity
+                }
             }
             popupActionButton("\(totalPrice)코인에 구매", enabled: canPurchase) {
                 if state.purchase(seed, quantity: purchaseQuantity) {
@@ -946,10 +926,13 @@ struct OverlayView: View {
         let statusText: String = {
             if isUnlocked { return "보유 중인 고양이" }
             if cat.id == "oddeye" {
-                return "수확 시 0.1% 확률로 획득"
+                return "당근 수확 시 0.1% 확률로 획득"
             }
-            if cat.id == "cheese" || cat.id == "gray" {
-                return "수확 시 20% 확률로 획득"
+            if cat.id == "cheese" {
+                return "당근 수확 시 20% 확률로 획득"
+            }
+            if cat.id == "gray" {
+                return "양배추 수확 시 20% 확률로 획득"
             }
             return "상점에서 구매할 수 있어요"
         }()
@@ -1083,6 +1066,9 @@ struct OverlayView: View {
                 quantityButton(systemName: "plus", enabled: saleQuantity < ownedCount) {
                     saleQuantity += 1
                 }
+                quantityMaxButton(enabled: saleQuantity < ownedCount) {
+                    saleQuantity = ownedCount
+                }
             }
 
             Button(action: {
@@ -1118,6 +1104,19 @@ struct OverlayView: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(enabled ? fp.border : fp.inkDim)
                 .frame(width: 34, height: 30)
+                .background(fp.cell)
+                .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+
+    private func quantityMaxButton(enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text("MAX")
+                .font(galmuriFont(9))
+                .foregroundColor(enabled ? fp.border : fp.inkDim)
+                .frame(width: 42, height: 30)
                 .background(fp.cell)
                 .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
         }

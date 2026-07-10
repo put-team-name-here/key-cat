@@ -140,11 +140,11 @@ final class AppState: ObservableObject {
     private static let cropGrowthInterval: TimeInterval = 5
     @Published var expanded = false {
         didSet {
-            if expanded {
+            if shouldProcessFarmWorkInBackground {
+                scheduleCollapsedFarmWorkIfNeeded()
+            } else {
                 collapsedFarmWorkItem?.cancel()
                 collapsedFarmWorkItem = nil
-            } else {
-                scheduleCollapsedFarmWorkIfNeeded()
             }
         }
     }
@@ -204,10 +204,13 @@ final class AppState: ObservableObject {
     private let seedInventoryKey = "seedInventory"
     private let cropInventoryKey = "cropInventory"
     private let unlockedCatIDsKey = "unlockedCatIDs"
+    private let lastAppActiveAtKey = "lastAppActiveAt"
     private var growthTimer: Timer?
+    private var lastHeartbeatWriteAt: Date?
     private var delayedAutoPlantWork: DispatchWorkItem?
     private var autoPlantedSeedCount = 0
     private var collapsedFarmWorkItem: DispatchWorkItem?
+    private var farmPanelVisible = true
 
     init() {
         if UserDefaults.standard.object(forKey: coinsKey) == nil {
@@ -242,15 +245,23 @@ final class AppState: ObservableObject {
             cropInventory = CropInventory()
         }
         var loadedField = FarmFieldStorage.load()
-        // 이전 버전에서 이미 물을 준 작물은 현재 시점부터 성장을 시작한다.
+        let launchTime = Date()
+        let lastAppActiveAt = UserDefaults.standard.object(forKey: lastAppActiveAtKey) as? Date
+        let inactiveDuration = lastAppActiveAt.map { max(0, launchTime.timeIntervalSince($0)) }
+        // 앱이 종료돼 있던 시간은 wateredAt도 같은 만큼 앞으로 밀어 성장 계산에서 제외한다.
         for index in loadedField.tiles.indices
         where (loadedField.tiles[index].state == .wateredCarrotSeed
             || loadedField.tiles[index].state == .wateredCabbageSeed
             || loadedField.tiles[index].state == .growingCarrot
-            || loadedField.tiles[index].state == .growingCabbage)
-            && loadedField.tiles[index].wateredAt == nil {
-            loadedField.tiles[index].wateredAt = Date()
+            || loadedField.tiles[index].state == .growingCabbage) {
+            if let wateredAt = loadedField.tiles[index].wateredAt,
+               let inactiveDuration {
+                loadedField.tiles[index].wateredAt = wateredAt.addingTimeInterval(inactiveDuration)
+            } else if loadedField.tiles[index].wateredAt == nil || lastAppActiveAt == nil {
+                loadedField.tiles[index].wateredAt = launchTime
+            }
         }
+        UserDefaults.standard.set(launchTime, forKey: lastAppActiveAtKey)
         FarmFieldStorage.save(loadedField)
         farmField = loadedField
         farmWorkQueue = farmField.tiles.enumerated().compactMap { index, tile in
@@ -315,6 +326,21 @@ final class AppState: ObservableObject {
             autoPlantedSeedCount = 0
             farmWorkQueue.removeAll { $0.kind == .fetchingSeeds }
         }
+    }
+
+    /// 농장 창을 숨기면 확장 상태여도 상태 레이어가 작업 큐를 대신 처리한다.
+    func setFarmPanelVisible(_ visible: Bool) {
+        farmPanelVisible = visible
+        if shouldProcessFarmWorkInBackground {
+            scheduleCollapsedFarmWorkIfNeeded()
+        } else {
+            collapsedFarmWorkItem?.cancel()
+            collapsedFarmWorkItem = nil
+        }
+    }
+
+    func markAppTerminated() {
+        UserDefaults.standard.set(Date(), forKey: lastAppActiveAtKey)
     }
 
     /// 씨앗을 선택한 수량만큼 구매하고 총 가격을 코인에서 차감한다.
@@ -434,7 +460,7 @@ final class AppState: ObservableObject {
         var updatedInventory = cropInventory
         updatedInventory.add(crop)
         cropInventory = updatedInventory
-        unlockHarvestCatsIfNeeded()
+        unlockHarvestCatsIfNeeded(for: crop)
         var updatedField = farmField
         updatedField.tiles[index].state = .empty
         updatedField.tiles[index].wateredAt = nil
@@ -500,7 +526,7 @@ final class AppState: ObservableObject {
 
     /// 축소 화면에서는 밭 뷰가 없어도 작업 큐를 상태 레이어에서 순서대로 완료한다.
     private func scheduleCollapsedFarmWorkIfNeeded() {
-        guard !expanded,
+        guard shouldProcessFarmWorkInBackground,
               collapsedFarmWorkItem == nil,
               let task = farmWorkQueue.first
         else { return }
@@ -508,7 +534,9 @@ final class AppState: ObservableObject {
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.collapsedFarmWorkItem = nil
-            guard !self.expanded, self.farmWorkQueue.first == task else {
+            guard self.shouldProcessFarmWorkInBackground,
+                  self.farmWorkQueue.first == task
+            else {
                 self.scheduleCollapsedFarmWorkIfNeeded()
                 return
             }
@@ -516,6 +544,10 @@ final class AppState: ObservableObject {
         }
         collapsedFarmWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: work)
+    }
+
+    private var shouldProcessFarmWorkInBackground: Bool {
+        !expanded || !farmPanelVisible
     }
 
     private func saveSeedInventory() {
@@ -533,15 +565,17 @@ final class AppState: ObservableObject {
         UserDefaults.standard.set(data, forKey: unlockedCatIDsKey)
     }
 
-    /// 작물 한 개를 수확할 때 치즈·그레이는 각각 20%, 오드아이는 0.1% 확률로 획득한다.
-    private func unlockHarvestCatsIfNeeded() {
+    /// 당근은 치즈·오드아이, 양배추는 그레이만 각 드롭 확률에 따라 획득한다.
+    private func unlockHarvestCatsIfNeeded(for crop: CropKind) {
         var updatedIDs = unlockedCatIDs
         var newlyUnlockedIDs: [String] = []
-        let dropRates: [(catID: String, probability: Double)] = [
-            ("cheese", 0.2),
-            ("gray", 0.2),
-            ("oddeye", 0.001),
-        ]
+        let dropRates: [(catID: String, probability: Double)]
+        switch crop {
+        case .carrot:
+            dropRates = [("cheese", 0.2), ("oddeye", 0.001)]
+        case .cabbage:
+            dropRates = [("gray", 0.2)]
+        }
         for drop in dropRates where !updatedIDs.contains(drop.catID) {
             if Double.random(in: 0..<1) < drop.probability {
                 updatedIDs.insert(drop.catID)
@@ -567,6 +601,7 @@ final class AppState: ObservableObject {
 
     /// 급수 후 5초마다 01 → 02 → 03 이미지로 한 단계씩 성장시킨다.
     private func advanceGrowth(now: Date = Date()) {
+        writeActivityHeartbeatIfNeeded(at: now)
         var updatedField = farmField
         var changed = false
         var harvestTasks: [FarmWorkTask] = []
@@ -601,6 +636,12 @@ final class AppState: ObservableObject {
             farmField = updatedField
             farmWorkQueue.append(contentsOf: harvestTasks)
         }
+    }
+
+    private func writeActivityHeartbeatIfNeeded(at date: Date) {
+        guard lastHeartbeatWriteAt.map({ date.timeIntervalSince($0) >= 1 }) ?? true else { return }
+        lastHeartbeatWriteAt = date
+        UserDefaults.standard.set(date, forKey: lastAppActiveAtKey)
     }
 
     deinit {
