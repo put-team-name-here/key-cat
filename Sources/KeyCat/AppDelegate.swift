@@ -31,6 +31,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         counter.start()
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        counter.flushPersistence()
+    }
+
     /// Galmuri11 픽셀 폰트를 프로세스에 등록. 미등록 시 galmuriFont 가 시스템 폰트로 폴백된다.
     private func registerFonts() {
         guard let url = Bundle.module.url(forResource: "Galmuri11", withExtension: "ttf", subdirectory: "fonts") else {

@@ -48,6 +48,11 @@ private let codexCats: [CodexCatEntry] = [
     .init(id: "gray", name: "그레이", idleResource: "gray_idle"),
 ]
 
+private let shopCats: [CodexCatEntry] = [
+    .init(id: "siamese", name: "샴", idleResource: "siamese_idle"),
+    .init(id: "sphynx", name: "스핑크스", idleResource: "sphynx_idle"),
+]
+
 /// Simple triangle shape used for pixel-style cat ears.
 struct Triangle: Shape {
     func path(in rect: CGRect) -> Path {
@@ -74,6 +79,10 @@ struct OverlayView: View {
     @State private var seedPickerTile: FarmTileCoordinate?
     @State private var selectedCropForSale: CropKind?
     @State private var saleQuantity = 1
+    @State private var selectedSeedForPurchase: SeedKind?
+    @State private var selectedCatForPurchase: CodexCatEntry?
+    @State private var selectedCodexCat: CodexCatEntry?
+    @State private var purchaseQuantity = 1
 
     var body: some View {
         Group {
@@ -271,12 +280,39 @@ struct OverlayView: View {
         .frame(width: 360)
         .background(fp.panel)
         .overlay {
-            if let crop = selectedCropForSale {
+            if let notice = state.catUnlockNotices.first,
+               let cat = codexCats.first(where: { $0.id == notice.catID }) {
+                ZStack {
+                    Color.black.opacity(0.4)
+                    catUnlockPopup(notice: notice, cat: cat)
+                }
+            } else if let crop = selectedCropForSale {
                 ZStack {
                     Color.black.opacity(0.35)
                         .contentShape(Rectangle())
                         .onTapGesture { selectedCropForSale = nil }
                     salePopup(for: crop)
+                }
+            } else if let seed = selectedSeedForPurchase {
+                ZStack {
+                    Color.black.opacity(0.35)
+                        .contentShape(Rectangle())
+                        .onTapGesture { selectedSeedForPurchase = nil }
+                    seedPurchasePopup(for: seed)
+                }
+            } else if let cat = selectedCatForPurchase {
+                ZStack {
+                    Color.black.opacity(0.35)
+                        .contentShape(Rectangle())
+                        .onTapGesture { selectedCatForPurchase = nil }
+                    catPurchasePopup(for: cat)
+                }
+            } else if let cat = selectedCodexCat {
+                ZStack {
+                    Color.black.opacity(0.35)
+                        .contentShape(Rectangle())
+                        .onTapGesture { selectedCodexCat = nil }
+                    codexCatPopup(for: cat)
                 }
             }
         }
@@ -475,11 +511,23 @@ struct OverlayView: View {
 
     private var shopContent: some View {
         VStack(alignment: .leading, spacing: 10) {
-            categoryPill("씨앗")
+            HStack(spacing: 8) {
+                ForEach(ShopCategory.allCases) { category in
+                    shopCategoryButton(category)
+                }
+            }
             itemGrid {
-                shopSeedItem(.carrot)
-                shopSeedItem(.cabbage)
-                ForEach(0..<6, id: \.self) { _ in emptySlot }
+                switch state.selectedShopCategory {
+                case .seeds:
+                    shopSeedItem(.carrot)
+                    shopSeedItem(.cabbage)
+                    ForEach(0..<6, id: \.self) { _ in emptySlot }
+                case .cats:
+                    ForEach(shopCats) { cat in
+                        shopCatItem(cat)
+                    }
+                    ForEach(0..<6, id: \.self) { _ in emptySlot }
+                }
             }
         }
     }
@@ -563,6 +611,19 @@ struct OverlayView: View {
         .buttonStyle(.plain)
     }
 
+    private func shopCategoryButton(_ category: ShopCategory) -> some View {
+        let active = state.selectedShopCategory == category
+        return Button(action: { state.selectedShopCategory = category }) {
+            Text(category.rawValue)
+                .font(galmuriFont(14))
+                .foregroundColor(active ? fp.primaryText : fp.border)
+                .padding(.horizontal, 12).padding(.vertical, 5)
+                .background(active ? fp.primary : fp.cell)
+                .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        }
+        .buttonStyle(.plain)
+    }
+
     private func itemGrid<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
             content()
@@ -570,7 +631,10 @@ struct OverlayView: View {
     }
 
     private func shopSeedItem(_ seed: SeedKind) -> some View {
-        Button(action: { state.purchase(seed) }) {
+        Button(action: {
+            purchaseQuantity = 1
+            selectedSeedForPurchase = seed
+        }) {
             VStack(spacing: 3) {
                 cropImage(seed.growthImageName, fallbackColor: seedColor(seed), size: 24)
                 Text(seed.displayName)
@@ -582,7 +646,7 @@ struct OverlayView: View {
                 HStack(spacing: 2) {
                     Circle().fill(rt.yellow).frame(width: 11, height: 11)
                         .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
-                    Text("00").font(galmuriFont(10)).foregroundColor(fp.border)
+                    Text("\(seed.purchasePrice)").font(galmuriFont(10)).foregroundColor(fp.border)
                 }
             }
             .padding(.horizontal, 5).padding(.vertical, 4)
@@ -591,7 +655,195 @@ struct OverlayView: View {
             .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(seed.displayName) 1개 구매")
+        .accessibilityLabel("\(seed.displayName) 구매 수량 선택")
+    }
+
+    private func shopCatItem(_ cat: CodexCatEntry) -> some View {
+        Button(action: { selectedCatForPurchase = cat }) {
+            VStack(spacing: 2) {
+                catProductImage(cat, size: 32)
+                Text(cat.name)
+                    .font(galmuriFont(9))
+                    .foregroundColor(fp.border)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                HStack(spacing: 2) {
+                    Circle().fill(rt.yellow).frame(width: 10, height: 10)
+                        .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
+                    Text("10000")
+                        .font(galmuriFont(9))
+                        .foregroundColor(fp.border)
+                }
+            }
+            .padding(.horizontal, 4).padding(.vertical, 4)
+            .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
+            .background(fp.cell)
+            .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(cat.name), 10000코인에 구매")
+    }
+
+    @ViewBuilder private func catProductImage(_ cat: CodexCatEntry, size: CGFloat) -> some View {
+        if let image = CatIdleCache.image(cat.idleResource) {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.none)
+                .scaledToFit()
+                .frame(width: size, height: size)
+        } else {
+            catIcon
+        }
+    }
+
+    private func seedPurchasePopup(for seed: SeedKind) -> some View {
+        let totalPrice = seed.purchasePrice * purchaseQuantity
+        let canPurchase = state.coins >= totalPrice
+        let maxAffordableQuantity = max(1, min(99, state.coins / seed.purchasePrice))
+        return VStack(spacing: 14) {
+            popupHeader("\(seed.displayName) 구매") { selectedSeedForPurchase = nil }
+            cropImage(seed.growthImageName, fallbackColor: seedColor(seed), size: 48)
+            Text("현재 보유 \(state.seedCount(seed))개")
+                .font(galmuriFont(11))
+                .foregroundColor(fp.inkDim)
+            HStack(spacing: 12) {
+                quantityButton(systemName: "minus", enabled: purchaseQuantity > 1) {
+                    purchaseQuantity -= 1
+                }
+                Text("\(purchaseQuantity)개")
+                    .font(galmuriFont(16))
+                    .foregroundColor(fp.border)
+                    .frame(minWidth: 58)
+                quantityButton(systemName: "plus", enabled: purchaseQuantity < maxAffordableQuantity) {
+                    purchaseQuantity += 1
+                }
+            }
+            popupActionButton("\(totalPrice)코인에 구매", enabled: canPurchase) {
+                if state.purchase(seed, quantity: purchaseQuantity) {
+                    selectedSeedForPurchase = nil
+                }
+            }
+        }
+        .padding(16)
+        .frame(width: 250)
+        .background(fp.panel)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        .background(Rectangle().fill(Color.black.opacity(0.3)).offset(x: 5, y: 5))
+    }
+
+    private func catPurchasePopup(for cat: CodexCatEntry) -> some View {
+        let alreadyOwned = state.isCatUnlocked(id: cat.id)
+        return VStack(spacing: 14) {
+            popupHeader("\(cat.name) 구매") { selectedCatForPurchase = nil }
+            catProductImage(cat, size: 64)
+            Text("가격 10000코인")
+                .font(galmuriFont(11))
+                .foregroundColor(fp.inkDim)
+            popupActionButton(alreadyOwned ? "보유 중" : "10000코인에 구매",
+                              enabled: !alreadyOwned && state.coins >= 10_000) {
+                if state.purchaseCat(id: cat.id, unitPrice: 10_000) {
+                    selectedCatForPurchase = nil
+                }
+            }
+        }
+        .padding(16)
+        .frame(width: 250)
+        .background(fp.panel)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        .background(Rectangle().fill(Color.black.opacity(0.3)).offset(x: 5, y: 5))
+    }
+
+    private func catUnlockPopup(notice: CatUnlockNotice, cat: CodexCatEntry) -> some View {
+        let message = notice.source == .harvest
+            ? "수확 중 새로운 고양이를 만났어요!"
+            : "상점에서 새로운 고양이를 데려왔어요!"
+        return VStack(spacing: 13) {
+            Text("새 고양이 획득!")
+                .font(galmuriFont(17))
+                .foregroundColor(fp.border)
+            catProductImage(cat, size: 104)
+            Text(cat.name)
+                .font(galmuriFont(16))
+                .foregroundColor(fp.border)
+            Text(message)
+                .font(galmuriFont(10))
+                .foregroundColor(fp.inkDim)
+                .multilineTextAlignment(.center)
+            popupActionButton("확인", enabled: true) {
+                state.dismissCatUnlockNotice()
+            }
+        }
+        .padding(18)
+        .frame(width: 270)
+        .background(fp.panel)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        .background(Rectangle().fill(Color.black.opacity(0.3)).offset(x: 5, y: 5))
+    }
+
+    private func codexCatPopup(for cat: CodexCatEntry) -> some View {
+        let isUnlocked = state.isCatUnlocked(id: cat.id)
+        let isSelected = state.selectedCat.id == cat.id
+        let statusText: String = {
+            if isUnlocked { return "보유 중인 고양이" }
+            if cat.id == "oddeye" {
+                return "수확 시 0.1% 확률로 획득"
+            }
+            if cat.id == "cheese" || cat.id == "gray" {
+                return "수확 시 20% 확률로 획득"
+            }
+            return "상점에서 구매할 수 있어요"
+        }()
+        let buttonTitle = isSelected
+            ? "현재 사용 중"
+            : (isUnlocked ? "이 고양이로 변경하기" : "아직 획득하지 못했어요")
+
+        return VStack(spacing: 14) {
+            popupHeader(cat.name) { selectedCodexCat = nil }
+            catProductImage(cat, size: 104)
+            Text(statusText)
+                .font(galmuriFont(11))
+                .foregroundColor(fp.inkDim)
+            popupActionButton(buttonTitle, enabled: isUnlocked && !isSelected) {
+                if state.selectCat(id: cat.id) {
+                    selectedCodexCat = nil
+                }
+            }
+        }
+        .padding(16)
+        .frame(width: 270)
+        .background(fp.panel)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        .background(Rectangle().fill(Color.black.opacity(0.3)).offset(x: 5, y: 5))
+    }
+
+    private func popupHeader(_ title: String, onClose: @escaping () -> Void) -> some View {
+        HStack {
+            Text(title)
+                .font(galmuriFont(15))
+                .foregroundColor(fp.border)
+            Spacer(minLength: 0)
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(fp.border)
+                    .frame(width: 24, height: 24)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func popupActionButton(_ title: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(galmuriFont(13))
+                .foregroundColor(enabled ? fp.primaryText : fp.inkDim)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(enabled ? fp.primary : fp.cell)
+                .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
     }
 
     private func storedSeedItem(_ seed: SeedKind) -> some View {
@@ -747,17 +999,21 @@ struct OverlayView: View {
     }
 
     private func catEntry(_ cat: CodexCatEntry) -> some View {
-        VStack(spacing: 4) {
-            catIdleImage(cat.idleResource)
-            Text(cat.name)
-                .font(galmuriFont(10))
-                .foregroundColor(fp.border)
-                .multilineTextAlignment(.center)
+        Button(action: { selectedCodexCat = cat }) {
+            VStack(spacing: 4) {
+                catIdleImage(cat.idleResource)
+                Text(cat.name)
+                    .font(galmuriFont(10))
+                    .foregroundColor(fp.border)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 5).padding(.vertical, 6)
+            .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
+            .background(fp.cell)
+            .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
         }
-        .padding(.horizontal, 5).padding(.vertical, 6)
-        .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
-        .background(fp.cell)
-        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(cat.name) 고양이 상세 보기")
     }
 
     @ViewBuilder private func catIdleImage(_ resource: String) -> some View {
