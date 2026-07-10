@@ -181,7 +181,8 @@ struct FarmFieldGrassView: View {
                                 )].state
                                 boundaryTile(edge: edge,
                                              mirrored: (r + c).isMultiple(of: 2),
-                                             isWet: adjacentState.isWatered)
+                                             isWet: adjacentState.isWatered,
+                                             hasFlowers: grass == .flower)
                                     .frame(width: tileSize, height: tileSize)
                                     .clipped()
                             } else {
@@ -199,32 +200,39 @@ struct FarmFieldGrassView: View {
     /// dry_boundary_2 한 장을 방향별 회전·반전해 밭의 네 면을 감싼다.
     @ViewBuilder private func boundaryTile(edge: FarmBoundaryEdge,
                                            mirrored: Bool,
-                                           isWet: Bool) -> some View {
+                                           isWet: Bool,
+                                           hasFlowers: Bool) -> some View {
+        let sideImage = isWet
+            ? (hasFlowers ? "wet_boundary_flower" : "wet_boundary")
+            : (hasFlowers ? "dry_boundary_flower" : "dry_boundary_2")
+        let cornerImage = isWet
+            ? (hasFlowers ? "wet_boundary_line_flower" : "wet_boundary_line")
+            : (hasFlowers ? "dry_boundary_line_flower" : "dry_boundary_5")
         switch edge {
         case .top:
-            groundTile(isWet ? "wet_boundary" : "dry_boundary_2")
+            groundTile(sideImage)
                 .scaleEffect(x: mirrored ? -1 : 1, y: 1)
         case .bottom:
-            groundTile(isWet ? "wet_boundary" : "dry_boundary_2")
+            groundTile(sideImage)
                 .scaleEffect(x: mirrored ? -1 : 1, y: -1)
         case .left:
-            groundTile(isWet ? "wet_boundary" : "dry_boundary_2")
+            groundTile(sideImage)
                 .scaleEffect(x: mirrored ? -1 : 1, y: 1)
                 .rotationEffect(.degrees(-90))
         case .right:
-            groundTile(isWet ? "wet_boundary" : "dry_boundary_2")
+            groundTile(sideImage)
                 .scaleEffect(x: mirrored ? -1 : 1, y: 1)
                 .rotationEffect(.degrees(90))
         case .topLeft:
-            groundTile(isWet ? "wet_boundary_line" : "dry_boundary_5")
+            groundTile(cornerImage)
         case .topRight:
-            groundTile(isWet ? "wet_boundary_line" : "dry_boundary_5")
+            groundTile(cornerImage)
                 .scaleEffect(x: -1, y: 1)
         case .bottomLeft:
-            groundTile(isWet ? "wet_boundary_line" : "dry_boundary_5")
+            groundTile(cornerImage)
                 .scaleEffect(x: 1, y: -1)
         case .bottomRight:
-            groundTile(isWet ? "wet_boundary_line" : "dry_boundary_5")
+            groundTile(cornerImage)
                 .scaleEffect(x: -1, y: -1)
         }
     }
