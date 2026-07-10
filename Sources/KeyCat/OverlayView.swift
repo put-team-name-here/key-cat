@@ -337,6 +337,7 @@ struct OverlayView: View {
                 fps: 9,
                 speed: 34,
                 farmTask: state.farmWorkQueue.first,
+                harvestRewardImageName: currentHarvestRewardImageName,
                 onFarmTaskComplete: state.completeFarmWork
             )
                 .allowsHitTesting(false)
@@ -352,6 +353,23 @@ struct OverlayView: View {
         }
         .frame(height: 540)
         .clipped()
+    }
+
+    /// 현재 수확 작업의 작물에 맞는 머리 위 보상 이미지.
+    private var currentHarvestRewardImageName: String? {
+        guard let task = state.farmWorkQueue.first,
+              task.kind == .harvesting,
+              state.farmField.isValid(row: task.tile.row, column: task.tile.column)
+        else { return nil }
+        let tileState = state.farmField.tiles[state.farmField.index(
+            row: task.tile.row,
+            column: task.tile.column
+        )].state
+        switch tileState {
+        case .matureCarrot: return "carrot_plus"
+        case .matureCabbage: return "cabbage_plus"
+        default: return nil
+        }
     }
 
     /// 밭 그리드 (x: 6, y: 3)에 배치한 고양이집.
@@ -777,7 +795,7 @@ struct OverlayView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                     .multilineTextAlignment(.center)
-                Text("0m").font(galmuriFont(9)).foregroundColor(fp.inkDim)
+                Text(seed.displayedGrowthTime).font(galmuriFont(9)).foregroundColor(fp.inkDim)
                 HStack(spacing: 2) {
                     Circle().fill(rt.yellow).frame(width: 11, height: 11)
                         .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
