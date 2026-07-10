@@ -276,6 +276,11 @@ final class AppState: ObservableObject {
         unlockedCatIDs.contains(id)
     }
 
+    func earnCoins(_ amount: Int) {
+        guard amount > 0 else { return }
+        coins += amount
+    }
+
     /// 씨앗을 선택한 수량만큼 구매하고 총 가격을 코인에서 차감한다.
     @discardableResult
     func purchase(_ seed: SeedKind, quantity: Int = 1) -> Bool {

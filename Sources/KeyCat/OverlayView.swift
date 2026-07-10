@@ -82,6 +82,7 @@ struct OverlayView: View {
     @State private var selectedSeedForPurchase: SeedKind?
     @State private var selectedCatForPurchase: CodexCatEntry?
     @State private var selectedCodexCat: CodexCatEntry?
+    @State private var selectedTypingDate: Date?
     @State private var purchaseQuantity = 1
 
     var body: some View {
@@ -313,6 +314,13 @@ struct OverlayView: View {
                         .contentShape(Rectangle())
                         .onTapGesture { selectedCodexCat = nil }
                     codexCatPopup(for: cat)
+                }
+            } else if let date = selectedTypingDate {
+                ZStack {
+                    Color.black.opacity(0.35)
+                        .contentShape(Rectangle())
+                        .onTapGesture { selectedTypingDate = nil }
+                    typingRecordPopup(for: date)
                 }
             }
         }
@@ -571,22 +579,143 @@ struct OverlayView: View {
     }
 
     private var logContent: some View {
-        itemGrid {
-            VStack(spacing: 6) {
-                Text("기록 준비 중")
-                    .font(galmuriFont(10))
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("\(currentMonthNumber)월 기록")
+                    .font(galmuriFont(14))
                     .foregroundColor(fp.border)
-                    .multilineTextAlignment(.center)
-                Text("SOON")
-                    .font(galmuriFont(9))
+                Spacer(minLength: 0)
+                Text("연속 \(currentTypingStreak)일 · 이번 달 \(currentMonthTypingCount)타")
+                    .font(galmuriFont(11))
                     .foregroundColor(fp.inkDim)
             }
-            .padding(.horizontal, 5).padding(.vertical, 7)
-            .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
+
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.fixed(24), spacing: 8), count: 7),
+                spacing: 8
+            ) {
+                ForEach(currentMonthDates, id: \.self) { date in
+                    typingStreakCell(for: date)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
             .background(fp.cell)
-            .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
-            ForEach(0..<7, id: \.self) { _ in emptySlot }
+
+            HStack(spacing: 4) {
+                Text("적음")
+                    .font(galmuriFont(8))
+                    .foregroundColor(fp.inkDim)
+                ForEach([0, 50, 250, 750, 1500], id: \.self) { count in
+                    Rectangle()
+                        .fill(streakColor(for: count))
+                        .frame(width: 11, height: 11)
+                        .overlay(Rectangle().strokeBorder(fp.border.opacity(0.35), lineWidth: 1))
+                }
+                Text("많음")
+                    .font(galmuriFont(8))
+                    .foregroundColor(fp.inkDim)
+                Spacer(minLength: 0)
+                Text("날짜를 눌러 확인")
+                    .font(galmuriFont(8))
+                    .foregroundColor(fp.inkDim)
+            }
         }
+    }
+
+    private var currentMonthNumber: Int {
+        Calendar.current.component(.month, from: Date())
+    }
+
+    private var currentMonthTypingCount: Int {
+        currentMonthDates.reduce(0) { $0 + counter.count(on: $1) }
+    }
+
+    /// 이번 달 1일부터 마지막 날까지만 스트릭 셀로 표시한다.
+    private var currentMonthDates: [Date] {
+        let calendar = Calendar.current
+        guard let month = calendar.dateInterval(of: .month, for: Date()),
+              let dayCount = calendar.range(of: .day, in: .month, for: month.start)?.count
+        else { return [] }
+        return (0..<dayCount).compactMap { dayOffset in
+            calendar.date(byAdding: .day, value: dayOffset, to: month.start)
+        }
+    }
+
+    private var currentTypingStreak: Int {
+        let calendar = Calendar.current
+        var cursor = calendar.startOfDay(for: Date())
+        if counter.count(on: cursor) == 0,
+           let yesterday = calendar.date(byAdding: .day, value: -1, to: cursor) {
+            cursor = yesterday
+        }
+        var streak = 0
+        while counter.count(on: cursor) > 0 {
+            streak += 1
+            guard let previousDay = calendar.date(byAdding: .day, value: -1, to: cursor) else { break }
+            cursor = previousDay
+        }
+        return streak
+    }
+
+    @ViewBuilder private func typingStreakCell(for date: Date) -> some View {
+        let today = Calendar.current.startOfDay(for: Date())
+        if date > today {
+            Color.clear.frame(width: 24, height: 24)
+        } else {
+            let typingCount = counter.count(on: date)
+            Button(action: { selectedTypingDate = date }) {
+                Rectangle()
+                    .fill(streakColor(for: typingCount))
+                    .frame(width: 24, height: 24)
+                    .overlay(Rectangle().strokeBorder(fp.border.opacity(0.4), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(typingDateText(date)), \(typingCount)타")
+        }
+    }
+
+    private func streakColor(for count: Int) -> Color {
+        let green = Color(red: 0.24, green: 0.62, blue: 0.32)
+        switch count {
+        case 0: return fp.cell
+        case 1..<100: return green.opacity(0.28)
+        case 100..<500: return green.opacity(0.48)
+        case 500..<1_000: return green.opacity(0.72)
+        default: return green
+        }
+    }
+
+    private func typingDateText(_ date: Date) -> String {
+        let components = Calendar.current.dateComponents([.month, .day, .weekday], from: date)
+        let weekdays = ["일", "월", "화", "수", "목", "금", "토"]
+        let weekdayIndex = max(1, min(7, components.weekday ?? 1)) - 1
+        return "\(components.month ?? 0)월 \(components.day ?? 0)일 (\(weekdays[weekdayIndex]))"
+    }
+
+    private func typingRecordPopup(for date: Date) -> some View {
+        let typingCount = counter.count(on: date)
+        return VStack(spacing: 16) {
+            popupHeader("타자 기록") { selectedTypingDate = nil }
+            Rectangle()
+                .fill(streakColor(for: typingCount))
+                .frame(width: 48, height: 48)
+                .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+            Text(typingDateText(date))
+                .font(galmuriFont(13))
+                .foregroundColor(fp.border)
+            Text("\(typingCount)타")
+                .font(galmuriFont(22))
+                .foregroundColor(fp.border)
+            popupActionButton("확인", enabled: true) {
+                selectedTypingDate = nil
+            }
+        }
+        .padding(18)
+        .frame(width: 250)
+        .background(fp.panel)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        .background(Rectangle().fill(Color.black.opacity(0.3)).offset(x: 5, y: 5))
     }
 
     private func categoryPill(_ title: String) -> some View {

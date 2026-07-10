@@ -10,6 +10,7 @@ final class KeyCounter: ObservableObject {
     @Published private(set) var dailyCounts: [String: Int]
     @Published var permissionGranted = false
     @Published var isPaused = false
+    var onCoinEarned: ((Int) -> Void)?
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -93,7 +94,12 @@ final class KeyCounter: ObservableObject {
         rollOverDayIfNeeded(at: date)
         count += 1
         dailyCounts[currentDayKey] = count
-        scheduleSave()
+        if count.isMultiple(of: 10) {
+            saveDailyCounts()
+            onCoinEarned?(1)
+        } else {
+            scheduleSave()
+        }
     }
 
     /// 날짜가 바뀌면 새 날짜의 저장값(없으면 0)으로 화면 카운트를 전환한다.
@@ -149,6 +155,10 @@ final class KeyCounter: ObservableObject {
     func flushPersistence() {
         dailyCounts[currentDayKey] = count
         saveDailyCounts()
+    }
+
+    func count(on date: Date) -> Int {
+        dailyCounts[Self.dayKey(for: date), default: 0]
     }
 
     deinit {

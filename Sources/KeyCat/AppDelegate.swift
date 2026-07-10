@@ -28,6 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         registerFonts()
         setupStatusItem()
         setupPanel()
+        counter.onCoinEarned = { [weak self] amount in
+            self?.state.earnCoins(amount)
+        }
         counter.start()
     }
 
