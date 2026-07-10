@@ -9,8 +9,8 @@ struct OverlayView: View {
     /// "설정" 버튼: 메뉴바 NSMenu 를 popUp (AppDelegate 배선)
     var onOpenSettings: () -> Void = {}
 
-    private let t = Theme.rhodes
     private let rt = RetroTheme.shared
+    private let fp = FarmPixelTheme.shared
 
     var body: some View {
         Group {
@@ -175,278 +175,162 @@ struct OverlayView: View {
             .offset(x: x, y: y)
     }
 
-    // MARK: - 확장 화면 (농장 콘솔)
+    // MARK: - 확장 화면 (농장 콘솔, 시안 농장앱화면.dc.html)
+    // 정적 구성: 씨앗/탭 콘텐츠는 자리표시일 뿐 실제 상점·창고 기능은 아직 없음.
 
     private var expandedView: some View {
         VStack(spacing: 0) {
-            expandedHeader
-            Rectangle().fill(t.border).frame(height: 1)
-            farmArea
-            currencyRow
-            shopPreview
-            bottomTabs
+            farmField
+            resourceBar
+            inventorySection
+            tabBar
         }
-        .background(t.panel)
-        .overlay(Rectangle().stroke(t.border, lineWidth: 1))
-        .cornerBrackets([.tl, .br], color: t.accent)
+        .frame(width: 360)
+        .background(fp.panel)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        .background(
+            Rectangle()
+                .fill(Color.black.opacity(0.3))
+                .offset(x: 6, y: 6)
+        )
+        .padding(.trailing, 6)
+        .padding(.bottom, 6)
+        .fixedSize()
     }
 
-    private var expandedHeader: some View {
-        VStack(spacing: 10) {
-            HStack(alignment: .center, spacing: 10) {
-                logoMark
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("타이핑 농장")
-                        .font(.system(size: 15, weight: .heavy))
-                        .foregroundColor(t.text)
-                    Text("TYPING · FARM")
-                        .font(monoFont(9))
-                        .tracking(2)
-                        .foregroundColor(t.textDim)
-                }
-                Spacer()
-                iconButton(system: "arrow.down.right.and.arrow.up.left", action: onToggleSize)
-                iconButton(system: "gearshape", action: {})
-            }
-            HStack {
-                Text(t.brand)
-                    .font(monoFont(9, weight: .bold))
-                    .tracking(1.5)
-                    .foregroundColor(t.accent)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(t.accentSoft)
-                    .overlay(Rectangle().stroke(t.accent, lineWidth: 1))
-                Spacer()
-                Text("SESSION · #0428")
-                    .font(monoFont(9))
-                    .tracking(1)
-                    .foregroundColor(t.textFaint)
-            }
-        }
-        .padding(14)
-    }
+    // MARK: 밭 필드 - 잔디 배경 + 우상단 축소/설정 버튼
 
-    // 초록 밭 필드: 말풍선 + 고양이 + 밭 그리드
-    private var farmArea: some View {
+    private var farmField: some View {
         ZStack(alignment: .topTrailing) {
-            t.field
+            GrassBackground(tileSize: 45)
+            fieldControls.padding(10)
+        }
+        .frame(height: 540)
+        .clipped()
+    }
 
-            VStack(alignment: .leading, spacing: 16) {
-                // 말풍선 + 캐릭터
-                HStack(alignment: .top, spacing: 6) {
-                    ZStack(alignment: .top) {
-                        Rectangle()
-                            .fill(t.fieldCell)
-                            .frame(width: 150, height: 120)
-                            .overlay(Rectangle().stroke(t.borderStrong, lineWidth: 1))
-                        VStack(spacing: 6) {
-                            Text("김혜지")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(t.accentText)
-                                .padding(.horizontal, 10).padding(.vertical, 4)
-                                .background(t.accent)
-                            Text("고양이 집\n지어주나요?")
-                                .font(.system(size: 12))
-                                .foregroundColor(t.text)
-                                .multilineTextAlignment(.center)
-                        }
-                        .padding(.top, 12)
-                    }
-                    Image(systemName: "cursorarrow")
-                        .foregroundColor(t.accent)
-                        .padding(.top, 30)
-                }
-                .padding(.leading, 18)
+    private var fieldControls: some View {
+        HStack(spacing: 6) {
+            Button(action: onToggleSize) {
+                Image(systemName: "arrow.down.right.and.arrow.up.left")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(fp.border)
+                    .frame(width: 30, height: 30)
+                    .background(fp.cell)
+                    .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+            }
+            .buttonStyle(.plain)
 
-                // 고양이 (돌아다님)
-                HStack {
-                    Spacer()
-                    VStack(spacing: 4) {
-                        Text("고양이\n(돌아다님)")
-                            .font(.system(size: 11))
-                            .foregroundColor(t.text)
-                            .multilineTextAlignment(.center)
-                        Rectangle()
-                            .fill(t.fieldCell)
-                            .frame(width: 34, height: 46)
-                            .overlay(Rectangle().stroke(t.borderStrong, lineWidth: 1))
-                    }
-                    .padding(.trailing, 22)
-                }
+            Button(action: onOpenSettings) {
+                Text("설정")
+                    .font(galmuriFont(13))
+                    .foregroundColor(fp.border)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(fp.cell)
+                    .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+            }
+            .buttonStyle(.plain)
+        }
+    }
 
-                // 잔디 블록 라벨 + 밭 그리드
-                HStack(alignment: .center, spacing: 10) {
-                    VStack(spacing: 2) {
-                        Text("잔디\n블록")
-                            .font(.system(size: 12))
-                            .foregroundColor(t.text)
-                            .multilineTextAlignment(.center)
-                        Text("PLOT")
-                            .font(monoFont(8)).tracking(1.5)
-                            .foregroundColor(t.accent2)
-                    }
-                    farmGrid
-                    Spacer()
-                }
-                .padding(.leading, 14)
+    // MARK: 자원 바 - 기록 글자 수 + 보유 코인
 
+    private var resourceBar: some View {
+        VStack(spacing: 0) {
+            Rectangle().fill(fp.border).frame(height: 3)
+            HStack(spacing: 12) {
+                keyboardGlyph
+                Text("\(counter.count)자")
+                    .font(galmuriFont(15)).foregroundColor(fp.barText)
                 Spacer(minLength: 0)
+                Text("|").foregroundColor(fp.barDim)
+                Spacer(minLength: 0)
+                coinGlyph
+                Text("\(state.coins)")
+                    .font(galmuriFont(15)).foregroundColor(fp.barText)
             }
-            .padding(.top, 18)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var farmGrid: some View {
-        let labels: [[String]] = [
-            ["밭", "", ""],
-            ["", "", ""],
-            ["", "", ""],
-            ["씨앗", "성장중", "성장완료"]
-        ]
-        return ZStack(alignment: .bottomTrailing) {
-            VStack(spacing: 0) {
-                ForEach(0..<labels.count, id: \.self) { r in
-                    HStack(spacing: 0) {
-                        ForEach(0..<3, id: \.self) { c in
-                            Rectangle()
-                                .fill(t.fieldCell)
-                                .overlay(Rectangle().stroke(t.borderStrong, lineWidth: 1))
-                                .frame(width: 56, height: 42)
-                                .overlay(Text(labels[r][c])
-                                    .font(.system(size: 11))
-                                    .foregroundColor(t.text))
-                        }
-                    }
-                }
-            }
-            // 수확 가능 표시
-            Text("수확 가능")
-                .font(monoFont(8, weight: .bold)).tracking(1)
-                .foregroundColor(t.accent)
-                .padding(.horizontal, 6).padding(.vertical, 3)
-                .background(t.panel)
-                .overlay(Rectangle().stroke(t.accent, lineWidth: 1))
-                .offset(x: 54, y: -8)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .background(fp.bar)
+            Rectangle().fill(fp.border).frame(height: 3)
         }
     }
 
-    // 현재 타자 수 / 보유 재화
-    private var currencyRow: some View {
-        HStack(spacing: 10) {
-            statTile(ko: "현재 타자 수", en: "KEYS", value: "\(counter.count)")
-            statTile(ko: "보유 재화", en: "CURRENCY", value: "0")
-        }
-        .padding(14)
-    }
+    // MARK: 인벤토리 - "씨앗" 라벨 + 4열 그리드(씨앗 2종 + 빈 칸 6개)
 
-    // 상점 미리보기
-    private var shopPreview: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                shopItem(name: "당근")
-                shopItem(name: "양배추")
-                emptyItem
-                emptyItem
-            }
-            ZStack {
-                HStack(spacing: 10) {
-                    emptyItem; emptyItem; emptyItem; emptyItem
-                }
-                Text("나머지는 대충 아직 없다 표시")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(t.textDim)
+    private var inventorySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("씨앗")
+                .font(galmuriFont(14))
+                .foregroundColor(fp.border)
+                .padding(.horizontal, 12).padding(.vertical, 5)
+                .background(fp.cell)
+                .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
+                seedItem(name: "당근 씨앗", sproutColor: fp.carrot)
+                seedItem(name: "양배추 씨앗", sproutColor: fp.cabbage)
+                ForEach(0..<6, id: \.self) { _ in emptySlot }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.bottom, 14)
+        .padding(12)
     }
 
-    // 하단 탭 (번호 스텝 스타일, 동작 없음)
-    private var bottomTabs: some View {
-        let tabs = [("01", "상점", "SHOP"), ("02", "창고", "STORAGE"),
-                    ("03", "도감", "CODEX"), ("04", "기록", "LOG")]
-        return HStack(spacing: 0) {
-            ForEach(Array(tabs.enumerated()), id: \.offset) { i, tab in
-                let active = i == 0
-                VStack(spacing: 5) {
-                    Text(tab.0)
-                        .font(monoFont(11, weight: .bold))
-                        .foregroundColor(active ? t.accentText : t.textDim)
-                        .frame(width: 28, height: 28)
-                        .background(active ? t.accent : Color.clear)
-                        .overlay(CutCorner(tr: 6, bl: 6).stroke(active ? t.accent : t.border, lineWidth: 1))
-                        .clipShape(CutCorner(tr: 6, bl: 6))
-                    Text(tab.1)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(active ? t.accent : t.text)
-                    Text(tab.2)
-                        .font(monoFont(8)).tracking(1.5)
-                        .foregroundColor(t.textFaint)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .overlay(Rectangle().stroke(t.border, lineWidth: 0.5))
+    private func seedItem(name: String, sproutColor: Color) -> some View {
+        VStack(spacing: 3) {
+            HStack(spacing: 3) {
+                RoundedRectangle(cornerRadius: 3).fill(sproutColor).frame(width: 6, height: 8)
+                RoundedRectangle(cornerRadius: 3).fill(sproutColor).frame(width: 6, height: 10)
+            }
+            .frame(height: 16)
+            Text(name)
+                .font(galmuriFont(9)).foregroundColor(fp.border)
+                .multilineTextAlignment(.center)
+            Text("0m").font(galmuriFont(9)).foregroundColor(fp.inkDim)
+            HStack(spacing: 3) {
+                Circle().fill(rt.yellow).frame(width: 11, height: 11)
+                    .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
+                Text("00").font(galmuriFont(10)).foregroundColor(fp.border)
             }
         }
-        .background(t.panelAlt)
+        .padding(.horizontal, 5).padding(.vertical, 7)
+        .frame(maxWidth: .infinity)
+        .background(fp.cell)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
     }
 
-    // MARK: - 조각 뷰
-
-    /// 로고 마크: 러스트 사각 + 잘린 모서리
-    private var logoMark: some View {
+    private var emptySlot: some View {
         ZStack {
-            CutCorner(br: 10).fill(t.accent).frame(width: 32, height: 32)
-            Rectangle().fill(t.accentText).frame(width: 11, height: 11)
+            fp.cell
+            Image(systemName: "xmark")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(fp.inkDim)
         }
+        .aspectRatio(1, contentMode: .fit)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
     }
 
-    private func iconButton(system: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: system)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(t.accent2)
-                .frame(width: 32, height: 32)
-                .background(t.panelAlt)
-                .overlay(Rectangle().stroke(t.borderStrong, lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-    }
+    // MARK: 하단 탭 - 상점/창고/도감/기록 (표시만, 전환 기능은 추후 개발)
 
-    /// 통계 타일 (모노 대문자 서브라벨 + 큰 모노 값)
-    private func statTile(ko: String, en: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 5) {
-                Text(en).font(monoFont(8, weight: .bold)).tracking(1.5)
-                    .foregroundColor(t.textFaint)
-                Text(ko).font(.system(size: 10))
-                    .foregroundColor(t.textDim)
+    private var tabBar: some View {
+        let tabs = ["상점", "창고", "도감", "기록"]
+        return VStack(spacing: 0) {
+            Rectangle().fill(fp.border).frame(height: 3)
+            HStack(spacing: 0) {
+                ForEach(Array(tabs.enumerated()), id: \.offset) { i, tab in
+                    let active = i == 0
+                    Text(tab)
+                        .font(galmuriFont(14))
+                        .foregroundColor(active ? fp.primaryText : fp.border)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(active ? fp.primary : fp.cell)
+                        .overlay(alignment: .trailing) {
+                            Rectangle().fill(fp.border).frame(width: 2)
+                        }
+                }
             }
-            Text(value)
-                .font(monoFont(20, weight: .bold))
-                .foregroundColor(t.text)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(t.bg2)
-        .overlay(Rectangle().stroke(t.border, lineWidth: 1))
-    }
-
-    private func shopItem(name: String) -> some View {
-        VStack(spacing: 4) {
-            Text(name).font(.system(size: 12, weight: .semibold)).foregroundColor(t.text)
-            Text("가격").font(monoFont(9)).tracking(1).foregroundColor(t.textDim)
-        }
-        .frame(maxWidth: .infinity, minHeight: 58)
-        .background(t.bg2)
-        .overlay(Rectangle().stroke(t.border, lineWidth: 1))
-    }
-
-    private var emptyItem: some View {
-        Rectangle()
-            .fill(t.bg2)
-            .frame(maxWidth: .infinity, minHeight: 58)
-            .overlay(Rectangle().stroke(t.border, lineWidth: 1))
     }
 }
