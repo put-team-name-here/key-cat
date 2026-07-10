@@ -392,7 +392,11 @@ struct WalkingCat: View {
     /// 현재 방향/프레임에 맞는 한 장.
     @ViewBuilder private var sprite: some View {
         if let activity = motion.activity {
-            workSprite(activity)
+            if activity == .fetchingSeeds {
+                walkingSprite
+            } else {
+                workSprite(activity)
+            }
         } else {
             walkingSprite
         }
@@ -407,6 +411,8 @@ struct WalkingCat: View {
                                          frameCount: character.wateringFrameCount)
             case .harvesting:
                 return SpriteCache.sheet(character.harvestSheet, rows: 3, frameCount: 8)
+            case .fetchingSeeds:
+                return nil
             }
         }()
         if let frames = sheet?.frames, !frames.isEmpty {
@@ -441,9 +447,13 @@ struct WalkingCat: View {
 
     private func updateFarmTask() {
         guard let task = farmTask else { return }
-        let verticalOffset = task.kind == .watering
-            ? spriteSize * 0.22
-            : spriteSize * 0.12 + 10
+        let verticalOffset: CGFloat = {
+            switch task.kind {
+            case .watering: return spriteSize * 0.22
+            case .harvesting: return spriteSize * 0.12 + 10
+            case .fetchingSeeds: return 0
+            }
+        }()
         let point = CGPoint(x: (CGFloat(task.tile.column) + 0.5) * farmTileSize,
                             y: (CGFloat(task.tile.row) + 0.5) * farmTileSize - verticalOffset)
         motion.perform(task.kind, at: point) {

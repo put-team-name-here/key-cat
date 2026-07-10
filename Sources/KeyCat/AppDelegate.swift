@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var coinsItem: NSMenuItem!
     private var harvestItem: NSMenuItem!
     private var pauseItem: NSMenuItem!
+    private var autoModeItem: NSMenuItem!
 
     private var hosting: NSHostingView<OverlayView>!
     /// 축소/확장 카드 콘텐츠 크기. setupPanel/toggleSize 에서 hosting fittingSize 로 확정.
@@ -78,6 +79,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pauseItem = NSMenuItem(title: "기록 일시 정지", action: #selector(togglePause), keyEquivalent: "p")
         pauseItem.image = symbolImage("pause", color: .white)
         menu.addItem(pauseItem)
+
+        autoModeItem = NSMenuItem(title: "오토 모드", action: #selector(toggleAutoMode), keyEquivalent: "a")
+        autoModeItem.image = symbolImage("gearshape.2", color: .systemGreen)
+        menu.addItem(autoModeItem)
 
         let quitItem = NSMenuItem(title: "프로그램 종료", action: #selector(quit), keyEquivalent: "q")
         quitItem.attributedTitle = NSAttributedString(
@@ -183,6 +188,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         counter.togglePause()
     }
 
+    @objc private func toggleAutoMode() {
+        state.toggleAutoMode()
+    }
+
     @objc private func quit() {
         NSApp.terminate(nil)
     }
@@ -197,5 +206,7 @@ extension AppDelegate: NSMenuDelegate {
         harvestItem.badge = NSMenuItemBadge(string: state.harvestAvailable ? "가능" : "대기 중")
         pauseItem.title = counter.isPaused ? "기록 재개" : "기록 일시 정지"
         pauseItem.image = symbolImage(counter.isPaused ? "play" : "pause", color: .white)
+        autoModeItem.state = state.autoModeEnabled ? .on : .off
+        autoModeItem.title = state.autoModeEnabled ? "오토 모드 끄기" : "오토 모드 켜기"
     }
 }

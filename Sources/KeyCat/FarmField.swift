@@ -9,6 +9,7 @@ struct FarmTileCoordinate: Equatable, Hashable, Codable {
 enum FarmWorkKind: Equatable {
     case watering
     case harvesting
+    case fetchingSeeds
 }
 
 struct FarmWorkTask: Equatable {
@@ -87,6 +88,8 @@ struct FarmFieldData: Codable {
     static let rows = 12
     static let dryGroundSize = 4
     static let dryGroundBottomMargin = 1
+    /// 고양이집이 놓인 그리드 좌표 (x: 6, y: 3).
+    static let catHouseCoordinate = FarmTileCoordinate(row: 3, column: 6)
 
     var tiles: [FieldTile] // row-major, count == cols * rows
 

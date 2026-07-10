@@ -14,6 +14,19 @@ enum GuiAssetCache {
     }
 }
 
+enum FabricAssetCache {
+    private static var cache: [String: NSImage] = [:]
+
+    static func image(_ name: String) -> NSImage? {
+        if let image = cache[name] { return image }
+        guard let url = Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "fabrics"),
+              let image = NSImage(contentsOf: url)
+        else { return nil }
+        cache[name] = image
+        return image
+    }
+}
+
 /// 도감에 표시할 idle 스프라이트 시트의 첫 프레임 캐시.
 enum CatIdleCache {
     private static var cache: [String: NSImage] = [:]
@@ -342,6 +355,7 @@ struct OverlayView: View {
             FarmFieldGrassView(field: state.farmField) { row, column in
                 seedPickerTile = FarmTileCoordinate(row: row, column: column)
             }
+            catHouse
             WalkingCat(
                 character: state.selectedCat,
                 spriteSize: 64,
@@ -363,6 +377,23 @@ struct OverlayView: View {
         }
         .frame(height: 540)
         .clipped()
+    }
+
+    /// 밭 그리드 (x: 6, y: 3)에 배치한 고양이집.
+    @ViewBuilder private var catHouse: some View {
+        if let image = FabricAssetCache.image("cat_house") {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.none)
+                .scaledToFit()
+                .frame(width: 110, height: 110)
+                .position(
+                    x: (CGFloat(FarmFieldData.catHouseCoordinate.column) + 0.5) * 45,
+                    y: (CGFloat(FarmFieldData.catHouseCoordinate.row) + 0.5) * 45
+                )
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 
     /// 선택한 45pt 밭 타일 바로 위에 씨앗 선택 패널의 중심을 둔다.
