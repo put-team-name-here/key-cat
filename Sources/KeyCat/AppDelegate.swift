@@ -19,9 +19,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var harvestItem: NSMenuItem!
     private var pauseItem: NSMenuItem!
 
-    /// 축소 카드 콘텐츠 크기. setupPanel 에서 hosting fittingSize 로 확정.
+    private var hosting: NSHostingView<OverlayView>!
+    /// 축소/확장 카드 콘텐츠 크기. setupPanel/toggleSize 에서 hosting fittingSize 로 확정.
     private var collapsedSize = NSSize(width: 357, height: 205)
-    private let expandedSize = NSSize(width: 405, height: 838)
+    private var expandedSize = NSSize(width: 366, height: 851)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         registerFonts()
@@ -104,7 +105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onOpenSettings: { [weak self] in self?.openSettings() }
         )
 
-        let hosting = NSHostingView(rootView: content)
+        hosting = NSHostingView(rootView: content)
         // 축소 카드의 자연 크기를 읽어 패널 크기를 확정(시안 352폭 + 하드 그림자 여백).
         let fitting = hosting.fittingSize
         if fitting.width > 0, fitting.height > 0 {
@@ -141,6 +142,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func toggleSize() {
         state.expanded.toggle()
+
+        // 전환된 화면의 실제 콘텐츠 크기를 다시 측정해 캐시를 갱신한다.
+        hosting.layoutSubtreeIfNeeded()
+        let measured = hosting.fittingSize
+        if measured.width > 0, measured.height > 0 {
+            if state.expanded { expandedSize = measured } else { collapsedSize = measured }
+        }
         let newSize = state.expanded ? expandedSize : collapsedSize
 
         // 우측 상단 모서리를 고정한 채 크기 변경
