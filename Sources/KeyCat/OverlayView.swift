@@ -37,6 +37,7 @@ struct OverlayView: View {
 
     private let rt = RetroTheme.shared
     private let fp = FarmPixelTheme.shared
+    @State private var seedPickerTile: FarmTileCoordinate?
 
     var body: some View {
         Group {
@@ -255,12 +256,102 @@ struct OverlayView: View {
     // MARK: 밭 필드 - 잔디 배경 + 우상단 축소/설정 버튼
 
     private var farmField: some View {
-        ZStack(alignment: .topTrailing) {
-            FarmFieldGrassView(field: state.farmField)
-            fieldControls.padding(10)
+        ZStack(alignment: .topLeading) {
+            FarmFieldGrassView(field: state.farmField) { row, column in
+                seedPickerTile = FarmTileCoordinate(row: row, column: column)
+            }
+            WalkingCat(
+                character: state.selectedCat,
+                spriteSize: 64,
+                fps: 9,
+                speed: 34,
+                farmTask: state.farmWorkQueue.first,
+                onFarmTaskComplete: state.completeFarmWork
+            )
+                .allowsHitTesting(false)
+            fieldControls
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .topTrailing)
+
+            if let tile = seedPickerTile {
+                seedPicker(for: tile)
+                    .position(seedPickerPosition(for: tile))
+                    .zIndex(1)
+            }
         }
         .frame(height: 540)
         .clipped()
+    }
+
+    /// 선택한 45pt 밭 타일 바로 위에 씨앗 선택 패널의 중심을 둔다.
+    private func seedPickerPosition(for tile: FarmTileCoordinate) -> CGPoint {
+        let tileSize: CGFloat = 45
+        let pickerWidth: CGFloat = 176
+        let tileCenterX = (CGFloat(tile.column) + 0.5) * tileSize
+        let clampedX = min(max(tileCenterX, pickerWidth / 2 + 6), 360 - pickerWidth / 2 - 6)
+        let tileTop = CGFloat(tile.row) * tileSize
+        return CGPoint(x: clampedX, y: tileTop - 49)
+    }
+
+    private func seedPicker(for tile: FarmTileCoordinate) -> some View {
+        let ownedSeeds = SeedKind.allCases.filter { state.seedCount($0) > 0 }
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 6) {
+                Text("심을 씨앗")
+                    .font(galmuriFont(12))
+                    .foregroundColor(fp.border)
+                Spacer(minLength: 0)
+                Button(action: { seedPickerTile = nil }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(fp.border)
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if ownedSeeds.isEmpty {
+                Text("창고에 보유한 씨앗이 없어요")
+                    .font(galmuriFont(9))
+                    .foregroundColor(fp.inkDim)
+                    .padding(.vertical, 5)
+            } else {
+                ForEach(ownedSeeds) { seed in
+                    Button(action: { selectSeed(seed, for: tile) }) {
+                        HStack(spacing: 7) {
+                            sproutIcon(seedColor(seed))
+                            Text(seed.displayName)
+                                .font(galmuriFont(10))
+                                .foregroundColor(fp.border)
+                            Spacer(minLength: 0)
+                            Text("\(state.seedCount(seed))개")
+                                .font(galmuriFont(9))
+                                .foregroundColor(fp.inkDim)
+                        }
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 5)
+                        .background(fp.cell)
+                        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 2))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(9)
+        .frame(width: 176)
+        .background(fp.panel)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        .background(
+            Rectangle()
+                .fill(Color.black.opacity(0.3))
+                .offset(x: 4, y: 4)
+        )
+    }
+
+    private func selectSeed(_ seed: SeedKind, for tile: FarmTileCoordinate) {
+        if state.plant(seed, at: tile) {
+            seedPickerTile = nil
+        }
     }
 
     private var fieldControls: some View {
@@ -328,7 +419,7 @@ struct OverlayView: View {
         case .codex:
             codexContent
         case .storage:
-            placeholderContent(title: "창고", message: "아직 비어 있어요")
+            storageContent
         case .log:
             placeholderContent(title: "기록", message: "기록 준비 중")
         }
@@ -338,9 +429,32 @@ struct OverlayView: View {
         VStack(alignment: .leading, spacing: 10) {
             categoryPill("씨앗")
             itemGrid {
-                seedItem(name: "당근 씨앗", sproutColor: fp.carrot)
-                seedItem(name: "양배추 씨앗", sproutColor: fp.cabbage)
+                shopSeedItem(.carrot)
+                shopSeedItem(.cabbage)
                 ForEach(0..<6, id: \.self) { _ in emptySlot }
+            }
+        }
+    }
+
+    private var storageContent: some View {
+        let ownedSeeds = SeedKind.allCases.filter { state.seedCount($0) > 0 }
+        let ownedCrops = CropKind.allCases.filter { state.cropCount($0) > 0 }
+        let occupiedCount = ownedSeeds.count + ownedCrops.count
+        return VStack(alignment: .leading, spacing: 10) {
+            categoryPill("창고")
+            itemGrid {
+                if occupiedCount == 0 {
+                    storageEmptyItem
+                    ForEach(0..<7, id: \.self) { _ in emptySlot }
+                } else {
+                    ForEach(ownedSeeds) { seed in
+                        storedSeedItem(seed)
+                    }
+                    ForEach(ownedCrops) { crop in
+                        storedCropItem(crop)
+                    }
+                    ForEach(0..<max(0, 8 - occupiedCount), id: \.self) { _ in emptySlot }
+                }
             }
         }
     }
@@ -419,23 +533,82 @@ struct OverlayView: View {
         }
     }
 
-    private func seedItem(name: String, sproutColor: Color) -> some View {
-        VStack(spacing: 3) {
-            sproutIcon(sproutColor)
-            Text(name)
+    private func shopSeedItem(_ seed: SeedKind) -> some View {
+        Button(action: { state.purchase(seed) }) {
+            VStack(spacing: 3) {
+                groundTile(seed.growthImageName)
+                    .frame(width: 24, height: 24)
+                Text(seed.displayName)
+                    .font(galmuriFont(9)).foregroundColor(fp.border)
+                    .multilineTextAlignment(.center)
+                Text("0m").font(galmuriFont(9)).foregroundColor(fp.inkDim)
+                HStack(spacing: 3) {
+                    Circle().fill(rt.yellow).frame(width: 11, height: 11)
+                        .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
+                    Text("00").font(galmuriFont(10)).foregroundColor(fp.border)
+                }
+            }
+            .padding(.horizontal, 5).padding(.vertical, 7)
+            .frame(maxWidth: .infinity, minHeight: 74)
+            .background(fp.cell)
+            .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(seed.displayName) 1개 구매")
+    }
+
+    private func storedSeedItem(_ seed: SeedKind) -> some View {
+        VStack(spacing: 4) {
+            groundTile(seed.growthImageName)
+                .frame(width: 24, height: 24)
+            Text(seed.displayName)
                 .font(galmuriFont(9)).foregroundColor(fp.border)
                 .multilineTextAlignment(.center)
-            Text("0m").font(galmuriFont(9)).foregroundColor(fp.inkDim)
-            HStack(spacing: 3) {
-                Circle().fill(rt.yellow).frame(width: 11, height: 11)
-                    .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
-                Text("00").font(galmuriFont(10)).foregroundColor(fp.border)
-            }
+            Text("\(state.seedCount(seed))개")
+                .font(galmuriFont(10)).foregroundColor(fp.inkDim)
         }
         .padding(.horizontal, 5).padding(.vertical, 7)
         .frame(maxWidth: .infinity, minHeight: 74)
         .background(fp.cell)
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+    }
+
+    private func storedCropItem(_ crop: CropKind) -> some View {
+        VStack(spacing: 4) {
+            groundTile(crop.imageName)
+                .frame(width: 28, height: 28)
+            Text(crop.displayName)
+                .font(galmuriFont(9)).foregroundColor(fp.border)
+            Text("\(state.cropCount(crop))개")
+                .font(galmuriFont(10)).foregroundColor(fp.inkDim)
+        }
+        .padding(.horizontal, 5).padding(.vertical, 7)
+        .frame(maxWidth: .infinity, minHeight: 74)
+        .background(fp.cell)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+    }
+
+    private var storageEmptyItem: some View {
+        VStack(spacing: 6) {
+            Text("아직 비어 있어요")
+                .font(galmuriFont(10))
+                .foregroundColor(fp.border)
+                .multilineTextAlignment(.center)
+            Text("EMPTY")
+                .font(galmuriFont(9))
+                .foregroundColor(fp.inkDim)
+        }
+        .padding(.horizontal, 5).padding(.vertical, 7)
+        .frame(maxWidth: .infinity, minHeight: 74)
+        .background(fp.cell)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+    }
+
+    private func seedColor(_ seed: SeedKind) -> Color {
+        switch seed {
+        case .carrot: return fp.carrot
+        case .cabbage: return fp.cabbage
+        }
     }
 
     private func cropEntry(name: String, sproutColor: Color) -> some View {

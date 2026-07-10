@@ -13,17 +13,27 @@ struct CatCharacter: Identifiable {
     let front: String     // 정면(아래로 걷기) 시트 리소스명
     let leftSheet: String // 왼쪽 걷기 시트
     let rightSheet: String? // 오른쪽 전용 시트, nil이면 leftSheet를 좌우 반전
+    let wateringSheet: String
+    let wateringRows: Int
+    let wateringFrameCount: Int
+    let harvestSheet: String
 }
 
 enum CatCatalog {
     /// assets/cats/ 6종을 Resources/cats/ 로 정규화해 이식한 목록.
     static let all: [CatCharacter] = [
-        .init(id: "cheese",  name: "치즈",    front: "cheese_front",  leftSheet: "cheese_side",  rightSheet: nil),
-        .init(id: "gray",    name: "고등어",  front: "gray_front",    leftSheet: "gray_side",    rightSheet: nil),
-        .init(id: "siamese", name: "샴",      front: "siamese_front", leftSheet: "siamese_side", rightSheet: nil),
-        .init(id: "sphynx",  name: "스핑크스", front: "sphynx_front",  leftSheet: "sphynx_side",  rightSheet: nil),
-        .init(id: "tuxedo",  name: "턱시도",  front: "tuxedo_front",  leftSheet: "tuxedo_side",  rightSheet: nil),
-        .init(id: "oddeye",  name: "오드아이", front: "oddeye_front",  leftSheet: "oddeye_left",  rightSheet: "oddeye_right"),
+        .init(id: "cheese", name: "치즈", front: "cheese_front", leftSheet: "cheese_side", rightSheet: nil,
+              wateringSheet: "cheese_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "cheese_harvest"),
+        .init(id: "gray", name: "고등어", front: "gray_front", leftSheet: "gray_side", rightSheet: nil,
+              wateringSheet: "gray_watering", wateringRows: 3, wateringFrameCount: 8, harvestSheet: "gray_harvest"),
+        .init(id: "siamese", name: "샴", front: "siamese_front", leftSheet: "siamese_side", rightSheet: nil,
+              wateringSheet: "siamese_watering", wateringRows: 3, wateringFrameCount: 8, harvestSheet: "siamese_harvest"),
+        .init(id: "sphynx", name: "스핑크스", front: "sphynx_front", leftSheet: "sphynx_side", rightSheet: nil,
+              wateringSheet: "sphynx_watering", wateringRows: 3, wateringFrameCount: 8, harvestSheet: "sphynx_harvest"),
+        .init(id: "tuxedo", name: "턱시도", front: "tuxedo_front", leftSheet: "tuxedo_side", rightSheet: nil,
+              wateringSheet: "tuxedo_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "tuxedo_harvest"),
+        .init(id: "oddeye", name: "오드아이", front: "oddeye_front", leftSheet: "oddeye_left", rightSheet: "oddeye_right",
+              wateringSheet: "oddeye_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "oddeye_harvest"),
     ]
 }
 
@@ -59,10 +69,17 @@ struct SpriteSheet {
 enum SpriteCache {
     private static var cache: [String: SpriteSheet] = [:]
 
-    static func sheet(_ resource: String) -> SpriteSheet? {
-        if let s = cache[resource] { return s }
-        guard let s = SpriteSheet(resource: resource) else { return nil }
-        cache[resource] = s
+    static func sheet(_ resource: String,
+                      columns: Int = 3,
+                      rows: Int = 3,
+                      frameCount: Int = 8) -> SpriteSheet? {
+        let key = "\(resource)-\(columns)x\(rows)-\(frameCount)"
+        if let s = cache[key] { return s }
+        guard let s = SpriteSheet(resource: resource,
+                                  columns: columns,
+                                  rows: rows,
+                                  frameCount: frameCount) else { return nil }
+        cache[key] = s
         return s
     }
 }
@@ -122,14 +139,35 @@ struct GrassBackground: View {
 struct FarmFieldGrassView: View {
     let field: FarmFieldData
     var tileSize: CGFloat = 45
+    var onDryGroundTap: (_ row: Int, _ column: Int) -> Void = { _, _ in }
 
     var body: some View {
         VStack(spacing: 0) {
             ForEach(0..<FarmFieldData.rows, id: \.self) { r in
                 HStack(spacing: 0) {
                     ForEach(0..<FarmFieldData.cols, id: \.self) { c in
-                        groundTile(field.tiles[r * FarmFieldData.cols + c].grass.imageName)
-                            .frame(width: tileSize, height: tileSize)
+                        if FarmFieldData.isDryGround(row: r, column: c) {
+                            let tileState = field.tiles[field.index(row: r, column: c)].state
+                            Button(action: {
+                                if tileState == .empty {
+                                    onDryGroundTap(r, c)
+                                }
+                            }) {
+                                ZStack {
+                                    groundTile(tileState.isWatered ? "wet_ground" : "dry_ground")
+                                    if let imageName = tileState.growthImageName {
+                                        groundTile(imageName)
+                                    }
+                                }
+                                .frame(width: tileSize, height: tileSize)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("밭 \(r + 1)행 \(c + 1)열")
+                        } else {
+                            groundTile(field.tiles[r * FarmFieldData.cols + c].grass.imageName)
+                                .frame(width: tileSize, height: tileSize)
+                        }
                     }
                 }
             }
@@ -149,6 +187,7 @@ final class CatMotion: ObservableObject {
     @Published private(set) var facing: Facing = .down
     @Published private(set) var frame = 0      // 0..<8
     @Published private(set) var moving = false
+    @Published private(set) var activity: FarmWorkKind?
 
     private let speed: CGFloat                 // pt/sec
     private let frameInterval: CGFloat         // 걷기 프레임 교체 간격(초). 작을수록 높은 fps
@@ -160,6 +199,8 @@ final class CatMotion: ObservableObject {
     private var configured = false
     private var lastTick: CFAbsoluteTime = 0
     private var timer: Timer?
+    private var workElapsed: CGFloat = 0
+    private var workCompletion: (() -> Void)?
 
     init(frameInterval: CGFloat, speed: CGFloat = 26) {
         self.frameInterval = frameInterval
@@ -190,11 +231,49 @@ final class CatMotion: ObservableObject {
         timer = nil
     }
 
+    /// 자유 배회를 멈추고 지정한 밭 타일로 이동해 급수 또는 수확 작업을 시작한다.
+    func perform(_ work: FarmWorkKind, at point: CGPoint, onComplete: @escaping () -> Void) {
+        target = point
+        pendingWork = work
+        workCompletion = onComplete
+        activity = nil
+        workElapsed = 0
+        pause = 0
+
+        let dx = point.x - position.x
+        let dy = point.y - position.y
+        if dy > abs(dx) {
+            facing = .down
+        } else {
+            facing = dx >= 0 ? .right : .left
+        }
+    }
+
     private func step() {
         guard configured else { return }
         let now = CFAbsoluteTimeGetCurrent()
         let dt = min(CGFloat(now - lastTick), 0.05)
         lastTick = now
+
+        if activity != nil {
+            workElapsed += dt
+            frameAccum += dt
+            if frameAccum >= frameInterval {
+                frameAccum -= frameInterval
+                frame = (frame + 1) % 8
+            }
+            if workElapsed >= 1.4 {
+                let completion = workCompletion
+                workCompletion = nil
+                activity = nil
+                pendingWork = nil
+                workElapsed = 0
+                frame = 0
+                pickTarget()
+                completion?()
+            }
+            return
+        }
 
         if pause > 0 {
             pause -= dt
@@ -207,6 +286,14 @@ final class CatMotion: ObservableObject {
         let dist = hypot(dx, dy)
         if dist < 2 {
             moving = false
+            if workCompletion != nil {
+                // perform에서 지정한 작업 종류는 이동이 끝난 순간 활성화한다.
+                activity = pendingWork
+                workElapsed = 0
+                frameAccum = 0
+                frame = 0
+                return
+            }
             pause = CGFloat.random(in: 0.4...1.8)
             pickTarget()
             return
@@ -223,6 +310,8 @@ final class CatMotion: ObservableObject {
             frame = (frame + 1) % 8
         }
     }
+
+    private var pendingWork: FarmWorkKind?
 
     /// 새 목표 지점을 고르고, 이동 방향에서 바라보는 방향(옆/아래)을 정한다.
     private func pickTarget() {
@@ -250,13 +339,25 @@ final class CatMotion: ObservableObject {
 struct WalkingCat: View {
     let character: CatCharacter
     let spriteSize: CGFloat
+    let farmTask: FarmWorkTask?
+    let farmTileSize: CGFloat
+    let onFarmTaskComplete: (FarmWorkTask) -> Void
     @StateObject private var motion: CatMotion
 
     /// - Parameters:
     ///   - fps: 걷기 프레임 교체 속도(초당 프레임). 낮을수록 뚝뚝 끊긴다.
-    init(character: CatCharacter, spriteSize: CGFloat = 46, fps: CGFloat = 9, speed: CGFloat = 26) {
+    init(character: CatCharacter,
+         spriteSize: CGFloat = 46,
+         fps: CGFloat = 9,
+         speed: CGFloat = 26,
+         farmTask: FarmWorkTask? = nil,
+         farmTileSize: CGFloat = 45,
+         onFarmTaskComplete: @escaping (FarmWorkTask) -> Void = { _ in }) {
         self.character = character
         self.spriteSize = spriteSize
+        self.farmTask = farmTask
+        self.farmTileSize = farmTileSize
+        self.onFarmTaskComplete = onFarmTaskComplete
         _motion = StateObject(wrappedValue: CatMotion(frameInterval: 1.0 / fps, speed: speed))
     }
 
@@ -270,10 +371,14 @@ struct WalkingCat: View {
                 .onAppear {
                     motion.configure(bounds: geo.size, sprite: spriteSize)
                     motion.start()
+                    updateFarmTask()
                 }
                 .onDisappear { motion.stop() }
                 .onChange(of: geo.size) { newSize in
                     motion.configure(bounds: newSize, sprite: spriteSize)
+                }
+                .onChange(of: farmTask) { _, _ in
+                    updateFarmTask()
                 }
         }
         .accessibilityLabel("\(character.name) 고양이")
@@ -286,6 +391,35 @@ struct WalkingCat: View {
 
     /// 현재 방향/프레임에 맞는 한 장.
     @ViewBuilder private var sprite: some View {
+        if let activity = motion.activity {
+            workSprite(activity)
+        } else {
+            walkingSprite
+        }
+    }
+
+    @ViewBuilder private func workSprite(_ activity: FarmWorkKind) -> some View {
+        let sheet: SpriteSheet? = {
+            switch activity {
+            case .watering:
+                return SpriteCache.sheet(character.wateringSheet,
+                                         rows: character.wateringRows,
+                                         frameCount: character.wateringFrameCount)
+            case .harvesting:
+                return SpriteCache.sheet(character.harvestSheet, rows: 3, frameCount: 8)
+            }
+        }()
+        if let frames = sheet?.frames, !frames.isEmpty {
+            frames[motion.frame % frames.count]
+                .resizable()
+                .interpolation(.none)
+                .scaledToFit()
+        } else {
+            Rectangle().fill(Color.black.opacity(0.25))
+        }
+    }
+
+    @ViewBuilder private var walkingSprite: some View {
         let resource: String = {
             switch motion.facing {
             case .down:  return character.front
@@ -302,6 +436,18 @@ struct WalkingCat: View {
         } else {
             // 시트 로드 실패 시 자리표시 사각형
             Rectangle().fill(Color.black.opacity(0.25))
+        }
+    }
+
+    private func updateFarmTask() {
+        guard let task = farmTask else { return }
+        let verticalOffset = task.kind == .watering
+            ? spriteSize * 0.22
+            : spriteSize * 0.12 + 10
+        let point = CGPoint(x: (CGFloat(task.tile.column) + 0.5) * farmTileSize,
+                            y: (CGFloat(task.tile.row) + 0.5) * farmTileSize - verticalOffset)
+        motion.perform(task.kind, at: point) {
+            onFarmTaskComplete(task)
         }
     }
 }
