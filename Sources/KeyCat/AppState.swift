@@ -138,10 +138,22 @@ struct CatUnlockNotice: Identifiable {
 /// 축소/확장 + 농장 자원 상태를 담는 가벼운 상태 객체
 final class AppState: ObservableObject {
     private static let cropGrowthInterval: TimeInterval = 5
-    @Published var expanded = false
+    @Published var expanded = false {
+        didSet {
+            if expanded {
+                collapsedFarmWorkItem?.cancel()
+                collapsedFarmWorkItem = nil
+            } else {
+                scheduleCollapsedFarmWorkIfNeeded()
+            }
+        }
+    }
     /// 최초 30코인으로 시작하며 판매로 변경될 때마다 저장한다.
     @Published private(set) var coins: Int {
         didSet { UserDefaults.standard.set(coins, forKey: coinsKey) }
+    }
+    @Published private(set) var autoModeEnabled: Bool {
+        didSet { UserDefaults.standard.set(autoModeEnabled, forKey: autoModeKey) }
     }
     /// 수확 가능 여부 (수확 시스템 연결 전 자리표시)
     @Published var harvestAvailable = false
@@ -180,15 +192,22 @@ final class AppState: ObservableObject {
 
     /// 발생 순서대로 고양이가 처리할 급수·수확 작업 큐.
     @Published private(set) var farmWorkQueue: [FarmWorkTask] = [] {
-        didSet { harvestAvailable = farmWorkQueue.contains { $0.kind == .harvesting } }
+        didSet {
+            harvestAvailable = farmWorkQueue.contains { $0.kind == .harvesting }
+            scheduleCollapsedFarmWorkIfNeeded()
+        }
     }
 
     private let catKey = "selectedCatId"
     private let coinsKey = "coins"
+    private let autoModeKey = "autoModeEnabled"
     private let seedInventoryKey = "seedInventory"
     private let cropInventoryKey = "cropInventory"
     private let unlockedCatIDsKey = "unlockedCatIDs"
     private var growthTimer: Timer?
+    private var delayedAutoPlantWork: DispatchWorkItem?
+    private var autoPlantedSeedCount = 0
+    private var collapsedFarmWorkItem: DispatchWorkItem?
 
     init() {
         if UserDefaults.standard.object(forKey: coinsKey) == nil {
@@ -196,6 +215,7 @@ final class AppState: ObservableObject {
         } else {
             coins = UserDefaults.standard.integer(forKey: coinsKey)
         }
+        autoModeEnabled = UserDefaults.standard.bool(forKey: autoModeKey)
         var initialUnlockedCatIDs = UserDefaults.standard.data(forKey: unlockedCatIDsKey)
             .flatMap { try? JSONDecoder().decode(Set<String>.self, from: $0) }
             ?? []
@@ -245,7 +265,11 @@ final class AppState: ObservableObject {
             return nil
         }
         harvestAvailable = farmWorkQueue.contains { $0.kind == .harvesting }
+        if autoModeEnabled {
+            autoPlantNextSeed()
+        }
         startGrowthTimer()
+        scheduleCollapsedFarmWorkIfNeeded()
     }
 
     /// 현재 선택된 고양이 캐릭터
@@ -281,6 +305,18 @@ final class AppState: ObservableObject {
         coins += amount
     }
 
+    func toggleAutoMode() {
+        autoModeEnabled.toggle()
+        if autoModeEnabled {
+            autoPlantNextSeed()
+        } else {
+            delayedAutoPlantWork?.cancel()
+            delayedAutoPlantWork = nil
+            autoPlantedSeedCount = 0
+            farmWorkQueue.removeAll { $0.kind == .fetchingSeeds }
+        }
+    }
+
     /// 씨앗을 선택한 수량만큼 구매하고 총 가격을 코인에서 차감한다.
     @discardableResult
     func purchase(_ seed: SeedKind, quantity: Int = 1) -> Bool {
@@ -289,6 +325,9 @@ final class AppState: ObservableObject {
         guard coins >= totalPrice else { return false }
         seedInventory.add(seed, quantity: quantity)
         coins -= totalPrice
+        if autoModeEnabled {
+            autoPlantNextSeed()
+        }
         return true
     }
 
@@ -349,16 +388,22 @@ final class AppState: ObservableObject {
     }
 
     func completeFarmWork(_ task: FarmWorkTask) {
+        let completedSeedFetch = task.kind == .fetchingSeeds
         switch task.kind {
         case .watering:
             completeWatering(at: task.tile)
         case .harvesting:
             completeHarvest(at: task.tile)
+        case .fetchingSeeds:
+            autoPlantedSeedCount = 0
         }
         if farmWorkQueue.first == task {
             farmWorkQueue.removeFirst()
         } else {
             farmWorkQueue.removeAll { $0 == task }
+        }
+        if completedSeedFetch && autoModeEnabled {
+            scheduleAutoPlant(after: 2)
         }
     }
 
@@ -394,6 +439,83 @@ final class AppState: ObservableObject {
         updatedField.tiles[index].state = .empty
         updatedField.tiles[index].wateredAt = nil
         farmField = updatedField
+        if autoModeEnabled {
+            scheduleAutoPlant(after: 2)
+        }
+    }
+
+    /// 빈 밭 중 한 곳을 무작위로 골라 씨앗 하나를 심고, 다음 파종은 2초 뒤 예약한다.
+    private func autoPlantNextSeed() {
+        guard autoModeEnabled, delayedAutoPlantWork == nil else { return }
+        if autoPlantedSeedCount >= 5 {
+            enqueueSeedFetchIfNeeded()
+            return
+        }
+
+        let emptyTiles = (0..<FarmFieldData.rows).flatMap { row in
+            (0..<FarmFieldData.cols).compactMap { column -> FarmTileCoordinate? in
+                guard FarmFieldData.isDryGround(row: row, column: column),
+                      farmField.tiles[farmField.index(row: row, column: column)].state == .empty
+                else { return nil }
+                return FarmTileCoordinate(row: row, column: column)
+            }
+        }
+
+        guard let tile = emptyTiles.randomElement(),
+              let seed = SeedKind.allCases.first(where: { seedCount($0) > 0 }),
+              plant(seed, at: tile)
+        else { return }
+
+        autoPlantedSeedCount += 1
+        if autoPlantedSeedCount >= 5 {
+            enqueueSeedFetchIfNeeded()
+            return
+        }
+
+        let hasRemainingSeed = SeedKind.allCases.contains { seedCount($0) > 0 }
+        let hasEmptyGround = emptyTiles.count > 1
+        if hasRemainingSeed && hasEmptyGround {
+            scheduleAutoPlant(after: 2)
+        }
+    }
+
+    /// 다섯 개를 심을 때마다 기존 작업 뒤에 고양이집 방문 작업을 한 번 추가한다.
+    private func enqueueSeedFetchIfNeeded() {
+        guard autoModeEnabled,
+              !farmWorkQueue.contains(where: { $0.kind == .fetchingSeeds })
+        else { return }
+        farmWorkQueue.append(FarmWorkTask(kind: .fetchingSeeds, tile: FarmFieldData.catHouseCoordinate))
+    }
+
+    private func scheduleAutoPlant(after delay: TimeInterval) {
+        guard autoModeEnabled, delayedAutoPlantWork == nil else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.delayedAutoPlantWork = nil
+            self.autoPlantNextSeed()
+        }
+        delayedAutoPlantWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, delay), execute: work)
+    }
+
+    /// 축소 화면에서는 밭 뷰가 없어도 작업 큐를 상태 레이어에서 순서대로 완료한다.
+    private func scheduleCollapsedFarmWorkIfNeeded() {
+        guard !expanded,
+              collapsedFarmWorkItem == nil,
+              let task = farmWorkQueue.first
+        else { return }
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.collapsedFarmWorkItem = nil
+            guard !self.expanded, self.farmWorkQueue.first == task else {
+                self.scheduleCollapsedFarmWorkIfNeeded()
+                return
+            }
+            self.completeFarmWork(task)
+        }
+        collapsedFarmWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: work)
     }
 
     private func saveSeedInventory() {
@@ -483,5 +605,7 @@ final class AppState: ObservableObject {
 
     deinit {
         growthTimer?.invalidate()
+        delayedAutoPlantWork?.cancel()
+        collapsedFarmWorkItem?.cancel()
     }
 }

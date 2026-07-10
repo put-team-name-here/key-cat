@@ -13,6 +13,7 @@ let package = Package(
                 .copy("Resources/fonts"),
                 .copy("Resources/grounds"),
                 .copy("Resources/gui"),
+                .copy("Resources/fabrics"),
             ]
         )
     ]
