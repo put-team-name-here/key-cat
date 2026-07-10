@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import CoreText
 
 /// borderless 창은 기본적으로 key window가 못 되므로 서브클래스로 허용 (버튼 클릭용)
 final class OverlayPanel: NSPanel {
@@ -12,18 +13,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let counter = KeyCounter()
     private let state = AppState()
 
+    private var menu: NSMenu!
     private var charsItem: NSMenuItem!
     private var coinsItem: NSMenuItem!
     private var harvestItem: NSMenuItem!
     private var pauseItem: NSMenuItem!
 
-    private let collapsedSize = NSSize(width: 230, height: 230)
+    /// 축소 카드 콘텐츠 크기. setupPanel 에서 hosting fittingSize 로 확정.
+    private var collapsedSize = NSSize(width: 357, height: 205)
     private let expandedSize = NSSize(width: 405, height: 838)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        registerFonts()
         setupStatusItem()
         setupPanel()
         counter.start()
+    }
+
+    /// Galmuri11 픽셀 폰트를 프로세스에 등록. 미등록 시 galmuriFont 가 시스템 폰트로 폴백된다.
+    private func registerFonts() {
+        guard let url = Bundle.module.url(forResource: "Galmuri11", withExtension: "ttf", subdirectory: "fonts") else {
+            NSLog("[KeyCat] Galmuri11.ttf 리소스를 찾지 못함")
+            return
+        }
+        var err: Unmanaged<CFError>?
+        if !CTFontManagerRegisterFontsForURL(url as CFURL, .process, &err) {
+            NSLog("[KeyCat] Galmuri11 등록 실패: \(String(describing: err?.takeRetainedValue()))")
+        }
     }
 
     // MARK: - 메뉴바 상주
@@ -32,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.title = "🐾"
 
-        let menu = NSMenu()
+        menu = NSMenu()
         menu.delegate = self
 
         let farmItem = NSMenuItem(title: "농장 표시/숨김", action: #selector(togglePanel), keyEquivalent: "f")
@@ -81,9 +97,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - 오버레이 창
 
     private func setupPanel() {
-        let content = OverlayView(counter: counter, state: state, onToggleSize: { [weak self] in
-            self?.toggleSize()
-        })
+        let content = OverlayView(
+            counter: counter,
+            state: state,
+            onToggleSize: { [weak self] in self?.toggleSize() },
+            onOpenSettings: { [weak self] in self?.openSettings() }
+        )
+
+        let hosting = NSHostingView(rootView: content)
+        // 축소 카드의 자연 크기를 읽어 패널 크기를 확정(시안 352폭 + 하드 그림자 여백).
+        let fitting = hosting.fittingSize
+        if fitting.width > 0, fitting.height > 0 {
+            collapsedSize = fitting
+        }
 
         panel = OverlayPanel(
             contentRect: NSRect(origin: .zero, size: collapsedSize),
@@ -91,7 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
-        panel.contentView = NSHostingView(rootView: content)
+        panel.contentView = hosting
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.level = .floating
@@ -123,6 +149,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         frame.size = newSize
         frame.origin = NSPoint(x: topRight.x - newSize.width, y: topRight.y - newSize.height)
         panel.setFrame(frame, display: true, animate: true)
+    }
+
+    /// "설정" 버튼: 메뉴바와 동일한 NSMenu 를 마우스 위치에 popUp
+    @objc private func openSettings() {
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
     }
 
     @objc private func togglePanel() {
