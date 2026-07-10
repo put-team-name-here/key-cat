@@ -14,6 +14,38 @@ enum GuiAssetCache {
     }
 }
 
+/// First-frame cache for 384x384 idle cat sprite sheets shown in the codex.
+enum CatIdleCache {
+    private static var cache: [String: NSImage] = [:]
+
+    static func image(_ name: String) -> NSImage? {
+        if let img = cache[name] { return img }
+        guard let url = Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "cats"),
+              let nsImg = NSImage(contentsOf: url),
+              let cg = nsImg.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let side = min(cg.width / 3, cg.height / 3)
+        guard let sub = cg.cropping(to: CGRect(x: 0, y: 0, width: side, height: side)) else { return nil }
+        let img = NSImage(cgImage: sub, size: NSSize(width: side, height: side))
+        cache[name] = img
+        return img
+    }
+}
+
+private struct CodexCatEntry: Identifiable {
+    let id: String
+    let name: String
+    let idleResource: String
+}
+
+private let codexCats: [CodexCatEntry] = [
+    .init(id: "siamese", name: "샴", idleResource: "siamese_idle"),
+    .init(id: "sphynx", name: "스핑크스", idleResource: "sphynx_idle"),
+    .init(id: "cheese", name: "치즈", idleResource: "cheese_idle"),
+    .init(id: "tuxedo", name: "턱시도", idleResource: "tuxedo_idle"),
+    .init(id: "oddeye", name: "오드아이", idleResource: "oddeye_idle"),
+    .init(id: "gray", name: "그레이", idleResource: "gray_idle"),
+]
+
 /// Simple triangle shape used for pixel-style cat ears.
 struct Triangle: Shape {
     func path(in rect: CGRect) -> Path {
@@ -269,7 +301,7 @@ struct OverlayView: View {
                 Image(systemName: "arrow.down.right.and.arrow.up.left")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(fp.border)
-                    .frame(width: 30, height: 30)
+                    .frame(width: 40, height: 40)
                     .background(fp.cell)
                     .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
             }
@@ -360,10 +392,10 @@ struct OverlayView: View {
                     cropEntry(name: "양배추", sproutColor: fp.cabbage)
                     ForEach(0..<6, id: \.self) { _ in emptySlot }
                 case .cats:
-                    ForEach(CatCatalog.all) { cat in
+                    ForEach(codexCats) { cat in
                         catEntry(cat)
                     }
-                    ForEach(0..<max(0, 8 - CatCatalog.all.count), id: \.self) { _ in emptySlot }
+                    ForEach(0..<max(0, 8 - codexCats.count), id: \.self) { _ in emptySlot }
                 }
             }
         }
@@ -455,21 +487,30 @@ struct OverlayView: View {
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
     }
 
-    private func catEntry(_ cat: CatCharacter) -> some View {
+    private func catEntry(_ cat: CodexCatEntry) -> some View {
         VStack(spacing: 4) {
-            catIcon
+            catIdleImage(cat.idleResource)
             Text(cat.name)
                 .font(galmuriFont(10))
                 .foregroundColor(fp.border)
                 .multilineTextAlignment(.center)
-            Text("고양이")
-                .font(galmuriFont(9))
-                .foregroundColor(fp.inkDim)
         }
-        .padding(.horizontal, 5).padding(.vertical, 7)
+        .padding(.horizontal, 5).padding(.vertical, 6)
         .frame(maxWidth: .infinity, minHeight: 74)
         .background(fp.cell)
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+    }
+
+    @ViewBuilder private func catIdleImage(_ resource: String) -> some View {
+        if let img = CatIdleCache.image(resource) {
+            Image(nsImage: img)
+                .resizable()
+                .interpolation(.none)
+                .scaledToFit()
+                .frame(width: 40, height: 40)
+        } else {
+            catIcon
+        }
     }
 
     private func sproutIcon(_ color: Color) -> some View {

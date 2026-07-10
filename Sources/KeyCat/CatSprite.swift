@@ -19,7 +19,7 @@ enum CatCatalog {
     /// assets/cats/ 6종을 Resources/cats/ 로 정규화해 이식한 목록.
     static let all: [CatCharacter] = [
         .init(id: "cheese",  name: "치즈",    front: "cheese_front",  leftSheet: "cheese_side",  rightSheet: nil),
-        .init(id: "gray",    name: "고등어",  front: "gray_front",    leftSheet: "gray_side",    rightSheet: nil),
+        .init(id: "gray",    name: "그레이",  front: "gray_front",    leftSheet: "gray_side",    rightSheet: nil),
         .init(id: "siamese", name: "샴",      front: "siamese_front", leftSheet: "siamese_side", rightSheet: nil),
         .init(id: "sphynx",  name: "스핑크스", front: "sphynx_front",  leftSheet: "sphynx_side",  rightSheet: nil),
         .init(id: "tuxedo",  name: "턱시도",  front: "tuxedo_front",  leftSheet: "tuxedo_side",  rightSheet: nil),
