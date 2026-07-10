@@ -60,6 +60,14 @@ enum SeedKind: String, CaseIterable, Codable, Identifiable {
         case .cabbage: return 15
         }
     }
+
+    /// 상점 카드에만 사용하는 안내용 성장시간. 실제 성장 타이머와는 무관하다.
+    var displayedGrowthTime: String {
+        switch self {
+        case .carrot: return "2분"
+        case .cabbage: return "5분"
+        }
+    }
 }
 
 /// 씨앗 종류별 보유 수량. 새 종류가 추가되어도 기존 저장 데이터와 호환된다.

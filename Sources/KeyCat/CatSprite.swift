@@ -84,6 +84,22 @@ enum SpriteCache {
     }
 }
 
+/// 고양이 상태 말풍선 GUI PNG 캐시.
+enum CatStatusAssetCache {
+    private static var cache: [String: NSImage] = [:]
+
+    static func image(_ name: String) -> NSImage? {
+        if let image = cache[name] { return image }
+        guard let url = Bundle.module.url(forResource: name,
+                                          withExtension: "png",
+                                          subdirectory: "gui"),
+              let image = NSImage(contentsOf: url)
+        else { return nil }
+        cache[name] = image
+        return image
+    }
+}
+
 // MARK: - 잔디 타일 배경
 
 /// grounds/ 잔디 타일 PNG 캐시. 리소스명 기준 1회 로드 후 재사용.
@@ -403,8 +419,12 @@ struct WalkingCat: View {
     let spriteSize: CGFloat
     let farmTask: FarmWorkTask?
     let farmTileSize: CGFloat
+    let harvestRewardImageName: String?
     let onFarmTaskComplete: (FarmWorkTask) -> Void
     @StateObject private var motion: CatMotion
+    @State private var activeRewardImageName: String?
+    @State private var rewardOffset: CGFloat = 0
+    @State private var rewardOpacity: Double = 0
 
     /// - Parameters:
     ///   - fps: 걷기 프레임 교체 속도(초당 프레임). 낮을수록 뚝뚝 끊긴다.
@@ -414,20 +434,47 @@ struct WalkingCat: View {
          speed: CGFloat = 26,
          farmTask: FarmWorkTask? = nil,
          farmTileSize: CGFloat = 45,
+         harvestRewardImageName: String? = nil,
          onFarmTaskComplete: @escaping (FarmWorkTask) -> Void = { _ in }) {
         self.character = character
         self.spriteSize = spriteSize
         self.farmTask = farmTask
         self.farmTileSize = farmTileSize
+        self.harvestRewardImageName = harvestRewardImageName
         self.onFarmTaskComplete = onFarmTaskComplete
         _motion = StateObject(wrappedValue: CatMotion(frameInterval: 1.0 / fps, speed: speed))
     }
 
     var body: some View {
         GeometryReader { geo in
-            sprite
-                .frame(width: spriteSize, height: spriteSize)
-                .scaleEffect(x: mirrored ? -1 : 1, y: 1)
+            ZStack {
+                sprite
+                    .frame(width: spriteSize, height: spriteSize)
+                    .scaleEffect(x: mirrored ? -1 : 1, y: 1)
+
+                if farmTask?.kind == .fetchingSeeds,
+                   let image = CatStatusAssetCache.image("no_seed") {
+                    Image(nsImage: image)
+                        .resizable()
+                        .interpolation(.none)
+                        .scaledToFit()
+                        .frame(width: 34, height: 34)
+                        .offset(y: -spriteSize * 0.68)
+                        .accessibilityHidden(true)
+                }
+
+                if let name = activeRewardImageName,
+                   let image = CatStatusAssetCache.image(name) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .interpolation(.none)
+                        .scaledToFit()
+                        .frame(width: 46, height: 46)
+                        .offset(y: -spriteSize * 0.7 + rewardOffset)
+                        .opacity(rewardOpacity)
+                        .accessibilityHidden(true)
+                }
+            }
                 .position(motion.position)
                 .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
                 .onAppear {
@@ -519,7 +566,26 @@ struct WalkingCat: View {
         let point = CGPoint(x: (CGFloat(task.tile.column) + 0.5) * farmTileSize,
                             y: (CGFloat(task.tile.row) + 0.5) * farmTileSize - verticalOffset)
         motion.perform(task.kind, at: point) {
+            if task.kind == .harvesting,
+               let imageName = harvestRewardImageName {
+                showHarvestReward(imageName)
+            }
             onFarmTaskComplete(task)
+        }
+    }
+
+    private func showHarvestReward(_ imageName: String) {
+        activeRewardImageName = imageName
+        rewardOffset = 0
+        rewardOpacity = 1
+        withAnimation(.easeOut(duration: 1.3)) {
+            rewardOffset = -38
+            rewardOpacity = 0
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) {
+            if activeRewardImageName == imageName {
+                activeRewardImageName = nil
+            }
         }
     }
 }
