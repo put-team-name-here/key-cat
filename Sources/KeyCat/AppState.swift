@@ -11,6 +11,11 @@ final class AppState: ObservableObject {
     /// 축소 화면에서 순환 선택 중인 고양이 인덱스 (CatCatalog.all 기준)
     @Published var selectedCatIndex: Int
 
+    /// 밭 잔디 배치 + 칸별 상태. farm.json 에서 복원하고, 바뀔 때마다 다시 저장한다.
+    @Published var farmField: FarmFieldData {
+        didSet { FarmFieldStorage.save(farmField) }
+    }
+
     private let catKey = "selectedCatId"
 
     init() {
@@ -21,6 +26,7 @@ final class AppState: ObservableObject {
         } else {
             selectedCatIndex = 0
         }
+        farmField = FarmFieldStorage.load()
     }
 
     /// 현재 선택된 고양이 캐릭터
