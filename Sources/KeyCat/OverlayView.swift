@@ -72,6 +72,8 @@ struct OverlayView: View {
     private let rt = RetroTheme.shared
     private let fp = FarmPixelTheme.shared
     @State private var seedPickerTile: FarmTileCoordinate?
+    @State private var selectedCropForSale: CropKind?
+    @State private var saleQuantity = 1
 
     var body: some View {
         Group {
@@ -268,6 +270,16 @@ struct OverlayView: View {
         }
         .frame(width: 360)
         .background(fp.panel)
+        .overlay {
+            if let crop = selectedCropForSale {
+                ZStack {
+                    Color.black.opacity(0.35)
+                        .contentShape(Rectangle())
+                        .onTapGesture { selectedCropForSale = nil }
+                    salePopup(for: crop)
+                }
+            }
+        }
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
         .background(
             Rectangle()
@@ -600,17 +612,105 @@ struct OverlayView: View {
     }
 
     private func storedCropItem(_ crop: CropKind) -> some View {
-        VStack(spacing: 4) {
-            cropImage(crop.imageName, fallbackColor: crop == .carrot ? fp.carrot : fp.cabbage, size: 28)
-            Text(crop.displayName)
-                .font(galmuriFont(9)).foregroundColor(fp.border)
-            Text("\(state.cropCount(crop))개")
-                .font(galmuriFont(10)).foregroundColor(fp.inkDim)
+        Button(action: { openSalePopup(for: crop) }) {
+            VStack(spacing: 4) {
+                cropImage(crop.imageName, fallbackColor: crop == .carrot ? fp.carrot : fp.cabbage, size: 28)
+                Text(crop.displayName)
+                    .font(galmuriFont(9)).foregroundColor(fp.border)
+                Text("\(state.cropCount(crop))개 · \(crop.salePrice)코인")
+                    .font(galmuriFont(9)).foregroundColor(fp.inkDim)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .padding(.horizontal, 4).padding(.vertical, 5)
+            .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
+            .background(fp.cell)
+            .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
         }
-        .padding(.horizontal, 5).padding(.vertical, 5)
-        .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
-        .background(fp.cell)
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(crop.displayName) 판매 수량 선택")
+    }
+
+    private func openSalePopup(for crop: CropKind) {
+        saleQuantity = 1
+        selectedCropForSale = crop
+    }
+
+    private func salePopup(for crop: CropKind) -> some View {
+        let ownedCount = state.cropCount(crop)
+        let totalPrice = crop.salePrice * saleQuantity
+        return VStack(spacing: 14) {
+            HStack {
+                Text("\(crop.displayName) 판매")
+                    .font(galmuriFont(15))
+                    .foregroundColor(fp.border)
+                Spacer(minLength: 0)
+                Button(action: { selectedCropForSale = nil }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(fp.border)
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
+            }
+
+            cropImage(crop.imageName, fallbackColor: crop == .carrot ? fp.carrot : fp.cabbage, size: 48)
+
+            Text("보유 수량 \(ownedCount)개")
+                .font(galmuriFont(11))
+                .foregroundColor(fp.inkDim)
+
+            HStack(spacing: 12) {
+                quantityButton(systemName: "minus", enabled: saleQuantity > 1) {
+                    saleQuantity -= 1
+                }
+                Text("\(saleQuantity)개")
+                    .font(galmuriFont(16))
+                    .foregroundColor(fp.border)
+                    .frame(minWidth: 58)
+                quantityButton(systemName: "plus", enabled: saleQuantity < ownedCount) {
+                    saleQuantity += 1
+                }
+            }
+
+            Button(action: {
+                if state.sell(crop, quantity: saleQuantity) {
+                    selectedCropForSale = nil
+                }
+            }) {
+                Text("\(totalPrice)코인에 판매")
+                    .font(galmuriFont(13))
+                    .foregroundColor(fp.primaryText)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(fp.primary)
+                    .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+            }
+            .buttonStyle(.plain)
+            .disabled(ownedCount == 0)
+        }
+        .padding(16)
+        .frame(width: 250)
+        .background(fp.panel)
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        .background(
+            Rectangle()
+                .fill(Color.black.opacity(0.3))
+                .offset(x: 5, y: 5)
+        )
+    }
+
+    private func quantityButton(systemName: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(enabled ? fp.border : fp.inkDim)
+                .frame(width: 34, height: 30)
+                .background(fp.cell)
+                .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
     }
 
     private func seedColor(_ seed: SeedKind) -> Color {

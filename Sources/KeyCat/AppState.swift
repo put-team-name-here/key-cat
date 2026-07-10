@@ -81,6 +81,13 @@ enum CropKind: String, CaseIterable, Codable, Identifiable {
     }
 
     var imageName: String { rawValue }
+
+    var salePrice: Int {
+        switch self {
+        case .carrot: return 10
+        case .cabbage: return 35
+        }
+    }
 }
 
 struct CropInventory: Codable {
@@ -93,14 +100,22 @@ struct CropInventory: Codable {
     mutating func add(_ crop: CropKind) {
         quantities[crop, default: 0] += 1
     }
+
+    mutating func consume(_ crop: CropKind, quantity: Int = 1) -> Bool {
+        guard quantity > 0, count(of: crop) >= quantity else { return false }
+        quantities[crop, default: 0] -= quantity
+        return true
+    }
 }
 
 /// 축소/확장 + 농장 자원 상태를 담는 가벼운 상태 객체
 final class AppState: ObservableObject {
     private static let cropGrowthInterval: TimeInterval = 5
     @Published var expanded = false
-    /// 보유 코인 (코인 획득 시스템 연결 전 자리표시)
-    @Published var coins = 0
+    /// 최초 30코인으로 시작하며 판매로 변경될 때마다 저장한다.
+    @Published private(set) var coins: Int {
+        didSet { UserDefaults.standard.set(coins, forKey: coinsKey) }
+    }
     /// 수확 가능 여부 (수확 시스템 연결 전 자리표시)
     @Published var harvestAvailable = false
 
@@ -132,11 +147,17 @@ final class AppState: ObservableObject {
     }
 
     private let catKey = "selectedCatId"
+    private let coinsKey = "coins"
     private let seedInventoryKey = "seedInventory"
     private let cropInventoryKey = "cropInventory"
     private var growthTimer: Timer?
 
     init() {
+        if UserDefaults.standard.object(forKey: coinsKey) == nil {
+            coins = 30
+        } else {
+            coins = UserDefaults.standard.integer(forKey: coinsKey)
+        }
         // 마지막으로 고른 고양이를 id 로 복원. 없거나 못 찾으면 첫 번째.
         if let savedId = UserDefaults.standard.string(forKey: catKey),
            let idx = CatCatalog.all.firstIndex(where: { $0.id == savedId }) {
@@ -203,6 +224,16 @@ final class AppState: ObservableObject {
 
     func cropCount(_ crop: CropKind) -> Int {
         cropInventory.count(of: crop)
+    }
+
+    /// 창고의 작물을 선택한 수량만큼 판매하고 판매 대금을 코인에 더한다.
+    @discardableResult
+    func sell(_ crop: CropKind, quantity: Int) -> Bool {
+        var updatedInventory = cropInventory
+        guard updatedInventory.consume(crop, quantity: quantity) else { return false }
+        cropInventory = updatedInventory
+        coins += crop.salePrice * quantity
+        return true
     }
 
     /// 빈 밭 타일에 씨앗 하나를 심고 창고 수량을 차감한다.
