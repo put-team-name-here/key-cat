@@ -14,6 +14,40 @@ enum GuiAssetCache {
     }
 }
 
+/// 도감에 표시할 idle 스프라이트 시트의 첫 프레임 캐시.
+enum CatIdleCache {
+    private static var cache: [String: NSImage] = [:]
+
+    static func image(_ name: String) -> NSImage? {
+        if let image = cache[name] { return image }
+        guard let url = Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "cats"),
+              let sheet = NSImage(contentsOf: url),
+              let cgImage = sheet.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        else { return nil }
+
+        let side = min(cgImage.width / 3, cgImage.height / 3)
+        guard let frame = cgImage.cropping(to: CGRect(x: 0, y: 0, width: side, height: side)) else { return nil }
+        let image = NSImage(cgImage: frame, size: NSSize(width: side, height: side))
+        cache[name] = image
+        return image
+    }
+}
+
+private struct CodexCatEntry: Identifiable {
+    let id: String
+    let name: String
+    let idleResource: String
+}
+
+private let codexCats: [CodexCatEntry] = [
+    .init(id: "siamese", name: "샴", idleResource: "siamese_idle"),
+    .init(id: "sphynx", name: "스핑크스", idleResource: "sphynx_idle"),
+    .init(id: "cheese", name: "치즈", idleResource: "cheese_idle"),
+    .init(id: "tuxedo", name: "턱시도", idleResource: "tuxedo_idle"),
+    .init(id: "oddeye", name: "오드아이", idleResource: "oddeye_idle"),
+    .init(id: "gray", name: "그레이", idleResource: "gray_idle"),
+]
+
 /// Simple triangle shape used for pixel-style cat ears.
 struct Triangle: Shape {
     func path(in rect: CGRect) -> Path {
@@ -84,15 +118,14 @@ struct OverlayView: View {
             .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 3))
 
             Button(action: state.cycleCat) {
-                Text("변경")
-                    .font(galmuriFont(12))
-                    .foregroundColor(rt.ink)
+                guiControlIcon("change", size: 24)
                     .frame(width: 44, height: 44)
                     .background(Circle().fill(rt.yellow))
                     .overlay(Circle().strokeBorder(rt.ink, lineWidth: 3))
                     .shadow(color: Color.black.opacity(0.25), radius: 0, x: 2, y: 2)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("고양이 변경")
             .offset(x: 10, y: 10)
         }
         .frame(width: 118, height: 118, alignment: .topLeading)
@@ -102,27 +135,20 @@ struct OverlayView: View {
 
     private var statsColumn: some View {
         VStack(spacing: 7) {
-            // 확장 아이콘 + 설정 버튼
+            // 확대 + 설정 버튼
             HStack(spacing: 6) {
                 Spacer(minLength: 0)
                 Button(action: onToggleSize) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(rt.ink)
-                        .frame(width: 15, height: 15)
-                        .padding(.horizontal, 7)
-                        .frame(maxHeight: .infinity)
+                    guiControlIcon("zoom_in", size: 17)
+                        .frame(width: 29, height: 27)
                         .background(rt.panel)
                         .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 3))
                 }
                 .buttonStyle(.plain)
 
                 Button(action: onOpenSettings) {
-                    Text("설정")
-                        .font(galmuriFont(13))
-                        .foregroundColor(rt.text)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 4)
+                    guiControlIcon("setting", size: 17)
+                        .frame(width: 29, height: 27)
                         .background(rt.panel)
                         .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 3))
                 }
@@ -357,9 +383,7 @@ struct OverlayView: View {
     private var fieldControls: some View {
         HStack(spacing: 6) {
             Button(action: onToggleSize) {
-                Image(systemName: "arrow.down.right.and.arrow.up.left")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(fp.border)
+                guiControlIcon("zoom_out", size: 18)
                     .frame(width: 30, height: 30)
                     .background(fp.cell)
                     .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
@@ -367,15 +391,23 @@ struct OverlayView: View {
             .buttonStyle(.plain)
 
             Button(action: onOpenSettings) {
-                Text("설정")
-                    .font(galmuriFont(13))
-                    .foregroundColor(fp.border)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
+                guiControlIcon("setting", size: 18)
+                    .frame(width: 30, height: 30)
                     .background(fp.cell)
                     .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private func guiControlIcon(_ resource: String, size: CGFloat) -> some View {
+        if let image = GuiAssetCache.image(resource) {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.none)
+                .scaledToFit()
+                .frame(width: size, height: size)
         }
     }
 
@@ -405,11 +437,15 @@ struct OverlayView: View {
     // MARK: 인벤토리/도감 - 하단 탭에 따라 상점과 같은 틀로 전환
 
     private var inventorySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            inventoryContent
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 10) {
+                inventoryContent
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .padding(12)
         .frame(height: 218, alignment: .topLeading)
+        .clipped()
     }
 
     @ViewBuilder private var inventoryContent: some View {
@@ -421,7 +457,7 @@ struct OverlayView: View {
         case .storage:
             storageContent
         case .log:
-            placeholderContent(title: "기록", message: "기록 준비 중")
+            logContent
         }
     }
 
@@ -437,25 +473,16 @@ struct OverlayView: View {
     }
 
     private var storageContent: some View {
-        let ownedSeeds = SeedKind.allCases.filter { state.seedCount($0) > 0 }
         let ownedCrops = CropKind.allCases.filter { state.cropCount($0) > 0 }
-        let occupiedCount = ownedSeeds.count + ownedCrops.count
-        return VStack(alignment: .leading, spacing: 10) {
-            categoryPill("창고")
-            itemGrid {
-                if occupiedCount == 0 {
-                    storageEmptyItem
-                    ForEach(0..<7, id: \.self) { _ in emptySlot }
-                } else {
-                    ForEach(ownedSeeds) { seed in
-                        storedSeedItem(seed)
-                    }
-                    ForEach(ownedCrops) { crop in
-                        storedCropItem(crop)
-                    }
-                    ForEach(0..<max(0, 8 - occupiedCount), id: \.self) { _ in emptySlot }
-                }
+        let occupiedCount = SeedKind.allCases.count + ownedCrops.count
+        return itemGrid {
+            ForEach(SeedKind.allCases) { seed in
+                storedSeedItem(seed)
             }
+            ForEach(ownedCrops) { crop in
+                storedCropItem(crop)
+            }
+            ForEach(0..<max(0, 8 - occupiedCount), id: \.self) { _ in emptySlot }
         }
     }
 
@@ -470,38 +497,35 @@ struct OverlayView: View {
             itemGrid {
                 switch state.selectedCodexCategory {
                 case .crops:
-                    cropEntry(name: "당근", sproutColor: fp.carrot)
-                    cropEntry(name: "양배추", sproutColor: fp.cabbage)
+                    cropEntry(.carrot)
+                    cropEntry(.cabbage)
                     ForEach(0..<6, id: \.self) { _ in emptySlot }
                 case .cats:
-                    ForEach(CatCatalog.all) { cat in
+                    ForEach(codexCats) { cat in
                         catEntry(cat)
                     }
-                    ForEach(0..<max(0, 8 - CatCatalog.all.count), id: \.self) { _ in emptySlot }
+                    ForEach(0..<max(0, 8 - codexCats.count), id: \.self) { _ in emptySlot }
                 }
             }
         }
     }
 
-    private func placeholderContent(title: String, message: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            categoryPill(title)
-            itemGrid {
-                VStack(spacing: 6) {
-                    Text(message)
-                        .font(galmuriFont(10))
-                        .foregroundColor(fp.border)
-                        .multilineTextAlignment(.center)
-                    Text("SOON")
-                        .font(galmuriFont(9))
-                        .foregroundColor(fp.inkDim)
-                }
-                .padding(.horizontal, 5).padding(.vertical, 7)
-                .frame(maxWidth: .infinity, minHeight: 74)
-                .background(fp.cell)
-                .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
-                ForEach(0..<7, id: \.self) { _ in emptySlot }
+    private var logContent: some View {
+        itemGrid {
+            VStack(spacing: 6) {
+                Text("기록 준비 중")
+                    .font(galmuriFont(10))
+                    .foregroundColor(fp.border)
+                    .multilineTextAlignment(.center)
+                Text("SOON")
+                    .font(galmuriFont(9))
+                    .foregroundColor(fp.inkDim)
             }
+            .padding(.horizontal, 5).padding(.vertical, 7)
+            .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
+            .background(fp.cell)
+            .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+            ForEach(0..<7, id: \.self) { _ in emptySlot }
         }
     }
 
@@ -536,20 +560,21 @@ struct OverlayView: View {
     private func shopSeedItem(_ seed: SeedKind) -> some View {
         Button(action: { state.purchase(seed) }) {
             VStack(spacing: 3) {
-                groundTile(seed.growthImageName)
-                    .frame(width: 24, height: 24)
+                cropImage(seed.growthImageName, fallbackColor: seedColor(seed), size: 24)
                 Text(seed.displayName)
                     .font(galmuriFont(9)).foregroundColor(fp.border)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .multilineTextAlignment(.center)
                 Text("0m").font(galmuriFont(9)).foregroundColor(fp.inkDim)
-                HStack(spacing: 3) {
+                HStack(spacing: 2) {
                     Circle().fill(rt.yellow).frame(width: 11, height: 11)
                         .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
                     Text("00").font(galmuriFont(10)).foregroundColor(fp.border)
                 }
             }
-            .padding(.horizontal, 5).padding(.vertical, 7)
-            .frame(maxWidth: .infinity, minHeight: 74)
+            .padding(.horizontal, 5).padding(.vertical, 4)
+            .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
             .background(fp.cell)
             .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
         }
@@ -559,47 +584,31 @@ struct OverlayView: View {
 
     private func storedSeedItem(_ seed: SeedKind) -> some View {
         VStack(spacing: 4) {
-            groundTile(seed.growthImageName)
-                .frame(width: 24, height: 24)
+            cropImage(seed.growthImageName, fallbackColor: seedColor(seed), size: 28)
             Text(seed.displayName)
                 .font(galmuriFont(9)).foregroundColor(fp.border)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .multilineTextAlignment(.center)
             Text("\(state.seedCount(seed))개")
                 .font(galmuriFont(10)).foregroundColor(fp.inkDim)
         }
-        .padding(.horizontal, 5).padding(.vertical, 7)
-        .frame(maxWidth: .infinity, minHeight: 74)
+        .padding(.horizontal, 5).padding(.vertical, 5)
+        .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
         .background(fp.cell)
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
     }
 
     private func storedCropItem(_ crop: CropKind) -> some View {
         VStack(spacing: 4) {
-            groundTile(crop.imageName)
-                .frame(width: 28, height: 28)
+            cropImage(crop.imageName, fallbackColor: crop == .carrot ? fp.carrot : fp.cabbage, size: 28)
             Text(crop.displayName)
                 .font(galmuriFont(9)).foregroundColor(fp.border)
             Text("\(state.cropCount(crop))개")
                 .font(galmuriFont(10)).foregroundColor(fp.inkDim)
         }
-        .padding(.horizontal, 5).padding(.vertical, 7)
-        .frame(maxWidth: .infinity, minHeight: 74)
-        .background(fp.cell)
-        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
-    }
-
-    private var storageEmptyItem: some View {
-        VStack(spacing: 6) {
-            Text("아직 비어 있어요")
-                .font(galmuriFont(10))
-                .foregroundColor(fp.border)
-                .multilineTextAlignment(.center)
-            Text("EMPTY")
-                .font(galmuriFont(9))
-                .foregroundColor(fp.inkDim)
-        }
-        .padding(.horizontal, 5).padding(.vertical, 7)
-        .frame(maxWidth: .infinity, minHeight: 74)
+        .padding(.horizontal, 5).padding(.vertical, 5)
+        .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
         .background(fp.cell)
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
     }
@@ -611,38 +620,56 @@ struct OverlayView: View {
         }
     }
 
-    private func cropEntry(name: String, sproutColor: Color) -> some View {
+    private func cropEntry(_ crop: CropKind) -> some View {
         VStack(spacing: 4) {
-            sproutIcon(sproutColor)
-            Text(name)
+            cropImage(crop.imageName, fallbackColor: crop == .carrot ? fp.carrot : fp.cabbage)
+            Text(crop.displayName)
                 .font(galmuriFont(10))
                 .foregroundColor(fp.border)
                 .multilineTextAlignment(.center)
-            Text("작물")
-                .font(galmuriFont(9))
-                .foregroundColor(fp.inkDim)
         }
-        .padding(.horizontal, 5).padding(.vertical, 7)
-        .frame(maxWidth: .infinity, minHeight: 74)
+        .padding(.horizontal, 5).padding(.vertical, 6)
+        .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
         .background(fp.cell)
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
     }
 
-    private func catEntry(_ cat: CatCharacter) -> some View {
+    @ViewBuilder private func cropImage(_ resource: String, fallbackColor: Color, size: CGFloat = 40) -> some View {
+        if let image = GuiAssetCache.image(resource) {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.none)
+                .scaledToFit()
+                .frame(width: size, height: size)
+        } else {
+            sproutIcon(fallbackColor)
+        }
+    }
+
+    private func catEntry(_ cat: CodexCatEntry) -> some View {
         VStack(spacing: 4) {
-            catIcon
+            catIdleImage(cat.idleResource)
             Text(cat.name)
                 .font(galmuriFont(10))
                 .foregroundColor(fp.border)
                 .multilineTextAlignment(.center)
-            Text("고양이")
-                .font(galmuriFont(9))
-                .foregroundColor(fp.inkDim)
         }
-        .padding(.horizontal, 5).padding(.vertical, 7)
-        .frame(maxWidth: .infinity, minHeight: 74)
+        .padding(.horizontal, 5).padding(.vertical, 6)
+        .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
         .background(fp.cell)
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+    }
+
+    @ViewBuilder private func catIdleImage(_ resource: String) -> some View {
+        if let image = CatIdleCache.image(resource) {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.none)
+                .scaledToFit()
+                .frame(width: 40, height: 40)
+        } else {
+            catIcon
+        }
     }
 
     private func sproutIcon(_ color: Color) -> some View {
@@ -671,7 +698,7 @@ struct OverlayView: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(fp.inkDim)
         }
-        .frame(maxWidth: .infinity, minHeight: 74)
+        .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
     }
 

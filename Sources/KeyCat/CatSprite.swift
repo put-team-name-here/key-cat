@@ -24,16 +24,16 @@ enum CatCatalog {
     static let all: [CatCharacter] = [
         .init(id: "cheese", name: "치즈", front: "cheese_front", leftSheet: "cheese_side", rightSheet: nil,
               wateringSheet: "cheese_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "cheese_harvest"),
-        .init(id: "gray", name: "고등어", front: "gray_front", leftSheet: "gray_side", rightSheet: nil,
-              wateringSheet: "gray_watering", wateringRows: 3, wateringFrameCount: 8, harvestSheet: "gray_harvest"),
+        .init(id: "gray", name: "그레이", front: "gray_front", leftSheet: "gray_side", rightSheet: nil,
+              wateringSheet: "gray_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "gray_harvest"),
         .init(id: "siamese", name: "샴", front: "siamese_front", leftSheet: "siamese_side", rightSheet: nil,
-              wateringSheet: "siamese_watering", wateringRows: 3, wateringFrameCount: 8, harvestSheet: "siamese_harvest"),
+              wateringSheet: "siamese_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "siamese_harvest"),
         .init(id: "sphynx", name: "스핑크스", front: "sphynx_front", leftSheet: "sphynx_side", rightSheet: nil,
               wateringSheet: "sphynx_watering", wateringRows: 3, wateringFrameCount: 8, harvestSheet: "sphynx_harvest"),
         .init(id: "tuxedo", name: "턱시도", front: "tuxedo_front", leftSheet: "tuxedo_side", rightSheet: nil,
-              wateringSheet: "tuxedo_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "tuxedo_harvest"),
+              wateringSheet: "tuxedo_watering", wateringRows: 3, wateringFrameCount: 8, harvestSheet: "tuxedo_harvest"),
         .init(id: "oddeye", name: "오드아이", front: "oddeye_front", leftSheet: "oddeye_left", rightSheet: "oddeye_right",
-              wateringSheet: "oddeye_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "oddeye_harvest"),
+              wateringSheet: "oddeye_watering", wateringRows: 3, wateringFrameCount: 8, harvestSheet: "oddeye_harvest"),
     ]
 }
 
