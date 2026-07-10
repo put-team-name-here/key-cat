@@ -346,11 +346,15 @@ struct OverlayView: View {
     // MARK: 인벤토리/도감 - 하단 탭에 따라 상점과 같은 틀로 전환
 
     private var inventorySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            inventoryContent
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 10) {
+                inventoryContent
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .padding(12)
         .frame(height: 218, alignment: .topLeading)
+        .clipped()
     }
 
     @ViewBuilder private var inventoryContent: some View {
@@ -360,9 +364,9 @@ struct OverlayView: View {
         case .codex:
             codexContent
         case .storage:
-            placeholderContent(title: "창고", message: "아직 비어 있어요")
+            storageContent
         case .log:
-            placeholderContent(title: "기록", message: "기록 준비 중")
+            logContent
         }
     }
 
@@ -370,8 +374,8 @@ struct OverlayView: View {
         VStack(alignment: .leading, spacing: 10) {
             categoryPill("씨앗")
             itemGrid {
-                seedItem(name: "당근 씨앗", sproutColor: fp.carrot)
-                seedItem(name: "양배추 씨앗", sproutColor: fp.cabbage)
+                seedItem(name: "당근 씨앗", imageResource: "carrot_growth_01", fallbackColor: fp.carrot)
+                seedItem(name: "양배추 씨앗", imageResource: "cabbage_growth_01", fallbackColor: fp.cabbage)
                 ForEach(0..<6, id: \.self) { _ in emptySlot }
             }
         }
@@ -401,25 +405,30 @@ struct OverlayView: View {
         }
     }
 
-    private func placeholderContent(title: String, message: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            categoryPill(title)
-            itemGrid {
-                VStack(spacing: 6) {
-                    Text(message)
-                        .font(galmuriFont(10))
-                        .foregroundColor(fp.border)
-                        .multilineTextAlignment(.center)
-                    Text("SOON")
-                        .font(galmuriFont(9))
-                        .foregroundColor(fp.inkDim)
-                }
-                .padding(.horizontal, 5).padding(.vertical, 7)
-                .frame(maxWidth: .infinity, minHeight: 74)
-                .background(fp.cell)
-                .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
-                ForEach(0..<7, id: \.self) { _ in emptySlot }
+    private var storageContent: some View {
+        itemGrid {
+            storageSeedItem(name: "당근 씨앗", imageResource: "carrot_growth_01", count: 0, fallbackColor: fp.carrot)
+            storageSeedItem(name: "양배추 씨앗", imageResource: "cabbage_growth_01", count: 0, fallbackColor: fp.cabbage)
+            ForEach(0..<6, id: \.self) { _ in emptySlot }
+        }
+    }
+
+    private var logContent: some View {
+        itemGrid {
+            VStack(spacing: 6) {
+                Text("기록 준비 중")
+                    .font(galmuriFont(10))
+                    .foregroundColor(fp.border)
+                    .multilineTextAlignment(.center)
+                Text("SOON")
+                    .font(galmuriFont(9))
+                    .foregroundColor(fp.inkDim)
             }
+            .padding(.horizontal, 5).padding(.vertical, 7)
+            .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
+            .background(fp.cell)
+            .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+            ForEach(0..<7, id: \.self) { _ in emptySlot }
         }
     }
 
@@ -451,21 +460,23 @@ struct OverlayView: View {
         }
     }
 
-    private func seedItem(name: String, sproutColor: Color) -> some View {
+    private func seedItem(name: String, imageResource: String, fallbackColor: Color) -> some View {
         VStack(spacing: 3) {
-            sproutIcon(sproutColor)
+            cropImage(imageResource, fallbackColor: fallbackColor, size: 24)
             Text(name)
                 .font(galmuriFont(9)).foregroundColor(fp.border)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .multilineTextAlignment(.center)
             Text("0m").font(galmuriFont(9)).foregroundColor(fp.inkDim)
-            HStack(spacing: 3) {
+            HStack(spacing: 2) {
                 Circle().fill(rt.yellow).frame(width: 11, height: 11)
                     .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
                 Text("00").font(galmuriFont(10)).foregroundColor(fp.border)
             }
         }
-        .padding(.horizontal, 5).padding(.vertical, 7)
-        .frame(maxWidth: .infinity, minHeight: 74)
+        .padding(.horizontal, 5).padding(.vertical, 4)
+        .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
         .background(fp.cell)
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
     }
@@ -479,18 +490,37 @@ struct OverlayView: View {
                 .multilineTextAlignment(.center)
         }
         .padding(.horizontal, 5).padding(.vertical, 6)
-        .frame(maxWidth: .infinity, minHeight: 74)
+        .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
         .background(fp.cell)
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
     }
 
-    @ViewBuilder private func cropImage(_ resource: String, fallbackColor: Color) -> some View {
+    private func storageSeedItem(name: String, imageResource: String, count: Int, fallbackColor: Color) -> some View {
+        VStack(spacing: 4) {
+            cropImage(imageResource, fallbackColor: fallbackColor, size: 28)
+            Text(name)
+                .font(galmuriFont(9))
+                .foregroundColor(fp.border)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .multilineTextAlignment(.center)
+            Text("\(count)개")
+                .font(galmuriFont(10))
+                .foregroundColor(fp.inkDim)
+        }
+        .padding(.horizontal, 5).padding(.vertical, 5)
+        .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
+        .background(fp.cell)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+    }
+
+    @ViewBuilder private func cropImage(_ resource: String, fallbackColor: Color, size: CGFloat = 40) -> some View {
         if let img = GuiAssetCache.image(resource) {
             Image(nsImage: img)
                 .resizable()
                 .interpolation(.none)
                 .scaledToFit()
-                .frame(width: 40, height: 40)
+                .frame(width: size, height: size)
         } else {
             sproutIcon(fallbackColor)
         }
@@ -505,7 +535,7 @@ struct OverlayView: View {
                 .multilineTextAlignment(.center)
         }
         .padding(.horizontal, 5).padding(.vertical, 6)
-        .frame(maxWidth: .infinity, minHeight: 74)
+        .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
         .background(fp.cell)
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
     }
@@ -548,7 +578,7 @@ struct OverlayView: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(fp.inkDim)
         }
-        .frame(maxWidth: .infinity, minHeight: 74)
+        .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
         .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
     }
 
