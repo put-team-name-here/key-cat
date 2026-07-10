@@ -1,4 +1,18 @@
 import SwiftUI
+import AppKit
+
+/// GUI PNG asset cache for small overlay status icons.
+enum GuiAssetCache {
+    private static var cache: [String: NSImage] = [:]
+
+    static func image(_ name: String) -> NSImage? {
+        if let img = cache[name] { return img }
+        guard let url = Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "gui"),
+              let img = NSImage(contentsOf: url) else { return nil }
+        cache[name] = img
+        return img
+    }
+}
 
 /// 오버레이 창 내용. stt-spike RHODES 콘솔 테마 이식.
 /// 축소(작은 위젯) / 확장(농장 콘솔) 두 화면을 state.expanded 로 전환.
@@ -143,8 +157,36 @@ struct OverlayView: View {
             .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 3))
     }
 
-    /// 핑크 키보드 픽셀 아이콘 (20x18, 키 3개)
-    private var keyboardGlyph: some View {
+    /// assets/gui/key_cap_2.png 기반 타자 수 아이콘. 리소스 누락 시 기존 픽셀 아이콘으로 폴백.
+    @ViewBuilder private var keyboardGlyph: some View {
+        if let img = GuiAssetCache.image("key_cap_2") {
+            Image(nsImage: img)
+                .resizable()
+                .interpolation(.none)
+                .scaledToFit()
+                .frame(width: 22, height: 22)
+                .accessibilityLabel("타자 수")
+        } else {
+            legacyKeyboardGlyph
+        }
+    }
+
+    /// assets/gui/coin_2.png 기반 보유 코인 아이콘. 리소스 누락 시 기존 픽셀 아이콘으로 폴백.
+    @ViewBuilder private var coinGlyph: some View {
+        if let img = GuiAssetCache.image("coin_2") {
+            Image(nsImage: img)
+                .resizable()
+                .interpolation(.none)
+                .scaledToFit()
+                .frame(width: 22, height: 22)
+                .accessibilityLabel("보유 코인")
+        } else {
+            legacyCoinGlyph
+        }
+    }
+
+    /// 폴백용 핑크 키보드 픽셀 아이콘 (20x18, 키 3개)
+    private var legacyKeyboardGlyph: some View {
         ZStack(alignment: .topLeading) {
             Rectangle().fill(rt.pink)
             pixel(x: 3, y: 4, w: 4, h: 4, color: rt.pinkKey)
@@ -155,8 +197,8 @@ struct OverlayView: View {
         .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 2))
     }
 
-    /// 노란 코인 픽셀 아이콘 (18x18 원, 눈2 + 입)
-    private var coinGlyph: some View {
+    /// 폴백용 노란 코인 픽셀 아이콘 (18x18 원, 눈2 + 입)
+    private var legacyCoinGlyph: some View {
         ZStack(alignment: .topLeading) {
             Circle().fill(rt.yellow)
             pixel(x: 4, y: 5, w: 3, h: 4, color: rt.ink)
