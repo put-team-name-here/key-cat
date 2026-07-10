@@ -133,27 +133,20 @@ struct OverlayView: View {
 
     private var statsColumn: some View {
         VStack(spacing: 7) {
-            // 확장 아이콘 + 설정 버튼
+            // 확대 + 설정 버튼
             HStack(spacing: 6) {
                 Spacer(minLength: 0)
                 Button(action: onToggleSize) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(rt.ink)
-                        .frame(width: 15, height: 15)
-                        .padding(.horizontal, 7)
-                        .frame(maxHeight: .infinity)
+                    guiControlIcon("zoom_in", size: 17)
+                        .frame(width: 29, height: 27)
                         .background(rt.panel)
                         .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 3))
                 }
                 .buttonStyle(.plain)
 
                 Button(action: onOpenSettings) {
-                    Text("설정")
-                        .font(galmuriFont(13))
-                        .foregroundColor(rt.text)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 4)
+                    guiControlIcon("setting", size: 17)
+                        .frame(width: 29, height: 27)
                         .background(rt.panel)
                         .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 3))
                 }
@@ -298,9 +291,7 @@ struct OverlayView: View {
     private var fieldControls: some View {
         HStack(spacing: 6) {
             Button(action: onToggleSize) {
-                Image(systemName: "arrow.down.right.and.arrow.up.left")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(fp.border)
+                guiControlIcon("zoom_out", size: 22)
                     .frame(width: 40, height: 40)
                     .background(fp.cell)
                     .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
@@ -308,15 +299,23 @@ struct OverlayView: View {
             .buttonStyle(.plain)
 
             Button(action: onOpenSettings) {
-                Text("설정")
-                    .font(galmuriFont(13))
-                    .foregroundColor(fp.border)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
+                guiControlIcon("setting", size: 22)
+                    .frame(width: 40, height: 40)
                     .background(fp.cell)
                     .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private func guiControlIcon(_ resource: String, size: CGFloat) -> some View {
+        if let image = GuiAssetCache.image(resource) {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.none)
+                .scaledToFit()
+                .frame(width: size, height: size)
         }
     }
 
