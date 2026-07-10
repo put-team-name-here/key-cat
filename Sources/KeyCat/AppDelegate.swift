@@ -12,6 +12,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let counter = KeyCounter()
     private let state = AppState()
 
+    private var charsItem: NSMenuItem!
+    private var coinsItem: NSMenuItem!
+    private var harvestItem: NSMenuItem!
+    private var pauseItem: NSMenuItem!
+
     private let collapsedSize = NSSize(width: 230, height: 230)
     private let expandedSize = NSSize(width: 405, height: 838)
 
@@ -28,11 +33,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.title = "🐾"
 
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "오버레이 표시/숨김", action: #selector(togglePanel), keyEquivalent: "t"))
-        menu.addItem(NSMenuItem(title: "축소/확장", action: #selector(toggleSize), keyEquivalent: "e"))
+        menu.delegate = self
+
+        let farmItem = NSMenuItem(title: "농장 표시/숨김", action: #selector(togglePanel), keyEquivalent: "f")
+        farmItem.image = symbolImage("leaf", color: .systemGreen)
+        menu.addItem(farmItem)
+
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "종료", action: #selector(quit), keyEquivalent: "q"))
+
+        charsItem = infoItem(title: "기록한 글자", symbol: "heart", color: .systemPink)
+        coinsItem = infoItem(title: "보유 코인", symbol: "centsign.circle", color: .systemYellow)
+        harvestItem = infoItem(title: "수확 가능 여부", symbol: "carrot", color: .systemGreen)
+        menu.addItem(charsItem)
+        menu.addItem(coinsItem)
+        menu.addItem(harvestItem)
+
+        menu.addItem(.separator())
+        menu.addItem(.sectionHeader(title: "설정"))
+
+        pauseItem = NSMenuItem(title: "기록 일시 정지", action: #selector(togglePause), keyEquivalent: "p")
+        pauseItem.image = symbolImage("pause", color: .white)
+        menu.addItem(pauseItem)
+
+        let quitItem = NSMenuItem(title: "프로그램 종료", action: #selector(quit), keyEquivalent: "q")
+        quitItem.attributedTitle = NSAttributedString(
+            string: "프로그램 종료",
+            attributes: [.foregroundColor: NSColor.systemRed, .font: NSFont.menuFont(ofSize: 0)]
+        )
+        quitItem.image = symbolImage("rectangle.portrait.and.arrow.right", color: .systemRed)
+        menu.addItem(quitItem)
+
         statusItem.menu = menu
+    }
+
+    /// 값 표시용 비활성 항목 (action 없음 → autoenable 로 비활성, 값은 badge 로 표시)
+    private func infoItem(title: String, symbol: String, color: NSColor) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.image = symbolImage(symbol, color: color)
+        return item
+    }
+
+    private func symbolImage(_ name: String, color: NSColor) -> NSImage? {
+        NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(paletteColors: [color]))
     }
 
     // MARK: - 오버레이 창
@@ -90,7 +133,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @objc private func togglePause() {
+        counter.togglePause()
+    }
+
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+}
+
+// MARK: - 메뉴가 열릴 때마다 실시간 값 갱신
+
+extension AppDelegate: NSMenuDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        charsItem.badge = NSMenuItemBadge(string: "\(counter.count)자")
+        coinsItem.badge = NSMenuItemBadge(string: "\(state.coins)")
+        harvestItem.badge = NSMenuItemBadge(string: state.harvestAvailable ? "가능" : "대기 중")
+        pauseItem.title = counter.isPaused ? "기록 재개" : "기록 일시 정지"
+        pauseItem.image = symbolImage(counter.isPaused ? "play" : "pause", color: .white)
     }
 }

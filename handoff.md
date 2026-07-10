@@ -15,8 +15,8 @@
 - **PoC 범위는 리스크 2개 검증에 한정**: (1) 풀스크린 포함 항상-위 투명 오버레이, (2) 다른 앱 타자까지 세는 전역 카운트 + 필요 권한 확인. 농장 로직/재화/도감은 리스크 없는 일반 개발이라 PoC에서 제외.
 
 ## 재사용할 코어 / 건드리지 말 것
-- `Sources/TypingFarm/KeyCounter.swift` - CGEventTap(listen-only, cgSessionEventTap) 전역 keyDown 카운터. 권한 미허용 시 죽지 않고 2초 폴링으로 자동 재연결(`scheduleRetry`). PoC 핵심, 정식 버전에서도 코어로 재사용.
-- `Sources/TypingFarm/AppDelegate.swift` - `OverlayPanel`(borderless라 canBecomeKey override), `.floating` + `[.canJoinAllSpaces, .fullScreenAuxiliary]`, 우측상단 배치, 축소(230x230)/확장(405x838) 우측상단 모서리 고정 토글.
+- `Sources/KeyCat/KeyCounter.swift` - CGEventTap(listen-only, cgSessionEventTap) 전역 keyDown 카운터. 권한 미허용 시 죽지 않고 2초 폴링으로 자동 재연결(`scheduleRetry`). PoC 핵심, 정식 버전에서도 코어로 재사용.
+- `Sources/KeyCat/AppDelegate.swift` - `OverlayPanel`(borderless라 canBecomeKey override), `.floating` + `[.canJoinAllSpaces, .fullScreenAuxiliary]`, 우측상단 배치, 축소(230x230)/확장(405x838) 우측상단 모서리 고정 토글.
 - `main.swift` - NSApplication `.accessory`(Dock 아이콘 없이 메뉴바 상주). 이 활성화 정책 유지할 것.
 
 ## 현재 상태

@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "TypingFarm",
-    platforms: [.macOS(.v13)],
+    name: "keycat",
+    platforms: [.macOS(.v14)],
     targets: [
         .executableTarget(
-            name: "TypingFarm",
-            path: "Sources/TypingFarm"
+            name: "KeyCat",
+            path: "Sources/KeyCat"
         )
     ]
 )
