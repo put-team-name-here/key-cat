@@ -42,7 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Galmuri11 픽셀 폰트를 프로세스에 등록. 미등록 시 galmuriFont 가 시스템 폰트로 폴백된다.
     private func registerFonts() {
-        guard let url = Bundle.module.url(forResource: "Galmuri11", withExtension: "ttf", subdirectory: "fonts") else {
+        guard let url = AppResources.bundle.url(forResource: "Galmuri11", withExtension: "ttf", subdirectory: "fonts") else {
             NSLog("[KeyCat] Galmuri11.ttf 리소스를 찾지 못함")
             return
         }
@@ -114,7 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func menuBarIcon() -> NSImage? {
-        guard let url = Bundle.module.url(forResource: "menu_bar_cat", withExtension: "png", subdirectory: "gui"),
+        guard let url = AppResources.bundle.url(forResource: "menu_bar_cat", withExtension: "png", subdirectory: "gui"),
               let image = NSImage(contentsOf: url) else { return nil }
         image.size = NSSize(width: 20, height: 20)
         image.isTemplate = false

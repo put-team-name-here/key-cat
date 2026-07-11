@@ -20,7 +20,7 @@ struct CatCharacter: Identifiable {
 }
 
 enum CatCatalog {
-    /// assets/cats/ 6종을 Resources/cats/ 로 정규화해 이식한 목록.
+    /// Artwork/SourceAssets/cats의 6종을 Resources/cats로 정규화해 이식한 목록.
     static let all: [CatCharacter] = [
         .init(id: "cheese", name: "치즈", front: "cheese_front", leftSheet: "cheese_side", rightSheet: nil,
               wateringSheet: "cheese_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "cheese_harvest"),
@@ -44,7 +44,7 @@ struct SpriteSheet {
     let frames: [Image]
 
     init?(resource: String, columns: Int = 3, rows: Int = 3, frameCount: Int = 8) {
-        guard let url = Bundle.module.url(forResource: resource, withExtension: "png", subdirectory: "cats"),
+        guard let url = AppResources.bundle.url(forResource: resource, withExtension: "png", subdirectory: "cats"),
               let nsImg = NSImage(contentsOf: url),
               let cg = nsImg.cgImage(forProposedRect: nil, context: nil, hints: nil)
         else { return nil }
@@ -90,7 +90,7 @@ enum CatStatusAssetCache {
 
     static func image(_ name: String) -> NSImage? {
         if let image = cache[name] { return image }
-        guard let url = Bundle.module.url(forResource: name,
+        guard let url = AppResources.bundle.url(forResource: name,
                                           withExtension: "png",
                                           subdirectory: "gui"),
               let image = NSImage(contentsOf: url)
@@ -108,7 +108,7 @@ enum GroundCache {
 
     static func image(_ name: String) -> NSImage? {
         if let i = cache[name] { return i }
-        guard let url = Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "grounds"),
+        guard let url = AppResources.bundle.url(forResource: name, withExtension: "png", subdirectory: "grounds"),
               let img = NSImage(contentsOf: url) else { return nil }
         cache[name] = img
         return img
@@ -483,7 +483,7 @@ struct WalkingCat: View {
                     updateFarmTask()
                 }
                 .onDisappear { motion.stop() }
-                .onChange(of: geo.size) { newSize in
+                .onChange(of: geo.size) { _, newSize in
                     motion.configure(bounds: newSize, sprite: spriteSize)
                 }
                 .onChange(of: farmTask) { _, _ in

@@ -7,7 +7,7 @@ enum GuiAssetCache {
 
     static func image(_ name: String) -> NSImage? {
         if let img = cache[name] { return img }
-        guard let url = Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "gui"),
+        guard let url = AppResources.bundle.url(forResource: name, withExtension: "png", subdirectory: "gui"),
               let img = NSImage(contentsOf: url) else { return nil }
         cache[name] = img
         return img
@@ -19,7 +19,7 @@ enum FabricAssetCache {
 
     static func image(_ name: String) -> NSImage? {
         if let image = cache[name] { return image }
-        guard let url = Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "fabrics"),
+        guard let url = AppResources.bundle.url(forResource: name, withExtension: "png", subdirectory: "fabrics"),
               let image = NSImage(contentsOf: url)
         else { return nil }
         cache[name] = image
@@ -33,7 +33,7 @@ enum CatIdleCache {
 
     static func image(_ name: String) -> NSImage? {
         if let image = cache[name] { return image }
-        guard let url = Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "cats"),
+        guard let url = AppResources.bundle.url(forResource: name, withExtension: "png", subdirectory: "cats"),
               let sheet = NSImage(contentsOf: url),
               let cgImage = sheet.cgImage(forProposedRect: nil, context: nil, hints: nil)
         else { return nil }
@@ -203,7 +203,7 @@ struct OverlayView: View {
             .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 3))
     }
 
-    /// assets/gui/key_cap_2.png 기반 타자 수 아이콘. 리소스 누락 시 기존 픽셀 아이콘으로 폴백.
+    /// Resources/gui/key_cap_2.png 기반 타자 수 아이콘. 리소스 누락 시 기존 픽셀 아이콘으로 폴백.
     @ViewBuilder private var keyboardGlyph: some View {
         if let img = GuiAssetCache.image("key_cap_2") {
             Image(nsImage: img)
@@ -217,7 +217,7 @@ struct OverlayView: View {
         }
     }
 
-    /// assets/gui/coin_2.png 기반 보유 코인 아이콘. 리소스 누락 시 기존 픽셀 아이콘으로 폴백.
+    /// Resources/gui/coin_2.png 기반 보유 코인 아이콘. 리소스 누락 시 기존 픽셀 아이콘으로 폴백.
     @ViewBuilder private var coinGlyph: some View {
         if let img = GuiAssetCache.image("coin_2") {
             Image(nsImage: img)
