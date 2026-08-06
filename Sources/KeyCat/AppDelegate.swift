@@ -139,7 +139,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             counter: counter,
             state: state,
             onToggleSize: { [weak self] in self?.toggleSize() },
-            onOpenSettings: { [weak self] in self?.openSettings() }
+            onOpenSettings: { [weak self] in self?.openSettings() },
+            onOnboardingFinished: { [weak self] in self?.finishOnboarding() }
         )
 
         hosting = NSHostingView(rootView: content)
@@ -180,6 +181,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleSize() {
         state.expanded.toggle()
 
+        resizePanelToCurrentContent()
+    }
+
+    private func finishOnboarding() {
+        // SwiftUI 가 isOnboardingPresented 변경을 반영한 뒤 정상 화면 크기를 측정한다.
+        DispatchQueue.main.async { [weak self] in
+            self?.resizePanelToCurrentContent()
+        }
+    }
+
+    private func resizePanelToCurrentContent() {
         // 전환된 화면의 실제 콘텐츠 크기를 다시 측정해 캐시를 갱신한다.
         hosting.layoutSubtreeIfNeeded()
         let measured = hosting.fittingSize

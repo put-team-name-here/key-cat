@@ -68,6 +68,59 @@ private let shopCats: [CodexCatEntry] = [
     .init(id: "sphynx", idleResource: "sphynx_idle"),
 ]
 
+private enum OnboardingAsset {
+    case cat(String)
+    case crops
+    case catHouse
+    case cats([String])
+}
+
+private struct OnboardingPage: Identifiable {
+    let id: Int
+    let title: String
+    let description: String
+    let asset: OnboardingAsset
+}
+
+private let onboardingPages: [OnboardingPage] = [
+    .init(
+        id: 0,
+        title: L10n.text("고양이가 농사를 지을 수 있어요!", "Cats can farm too!"),
+        description: L10n.text(
+            "귀여운 고양이와 함께 타이핑 농장을 시작해 보세요.",
+            "Start your typing farm with a very capable cat."
+        ),
+        asset: .cat("tuxedo_idle")
+    ),
+    .init(
+        id: 1,
+        title: L10n.text("상점에서 씨앗을 사고 농사를 지어봐요!", "Buy seeds in the shop and start farming!"),
+        description: L10n.text(
+            "상점 탭에서 당근과 양배추 씨앗을 구매해 밭에 심을 수 있어요.",
+            "Buy carrot and cabbage seeds from the Shop tab, then plant them in the field."
+        ),
+        asset: .crops
+    ),
+    .init(
+        id: 2,
+        title: L10n.text("자동모드를 돌려놓으면 5개씩 심어요!", "Auto Mode plants five at a time!"),
+        description: L10n.text(
+            "5개를 다 심으면 고양이가 집에서 다시 씨앗을 가지러 가요!",
+            "After planting five, your cat visits home to fetch more seeds."
+        ),
+        asset: .catHouse
+    ),
+    .init(
+        id: 3,
+        title: L10n.text("특정 확률로 수확 시 새 고양이를 얻을 수 있어요!", "Harvests can unlock new cats!"),
+        description: L10n.text(
+            "작물을 수확할 때 새로운 고양이를 만날 수도 있어요.",
+            "You may meet a new cat when you harvest your crops."
+        ),
+        asset: .cats(["cheese_idle", "gray_idle", "oddeye_idle"])
+    ),
+]
+
 /// Simple triangle shape used for pixel-style cat ears.
 struct Triangle: Shape {
     func path(in rect: CGRect) -> Path {
@@ -88,6 +141,8 @@ struct OverlayView: View {
     var onToggleSize: () -> Void
     /// "설정" 버튼: 메뉴바 NSMenu 를 popUp (AppDelegate 배선)
     var onOpenSettings: () -> Void = {}
+    /// 온보딩 종료 뒤 AppKit 패널 크기를 정상 화면에 맞게 다시 측정한다.
+    var onOnboardingFinished: () -> Void = {}
 
     private let rt = RetroTheme.shared
     private let fp = FarmPixelTheme.shared
@@ -99,15 +154,177 @@ struct OverlayView: View {
     @State private var selectedCodexCat: CodexCatEntry?
     @State private var selectedTypingDate: Date?
     @State private var purchaseQuantity = 1
+    @State private var onboardingStep = 0
 
     var body: some View {
         Group {
-            if state.expanded {
+            if state.isOnboardingPresented {
+                onboardingView
+            } else if state.expanded {
                 expandedView
             } else {
                 collapsedView
             }
         }
+    }
+
+    // MARK: - 최초 실행 온보딩
+
+    private var onboardingView: some View {
+        VStack(spacing: 11) {
+            VStack(spacing: 4) {
+                Text(L10n.text("KEYCAT 시작하기", "GET STARTED WITH KEYCAT"))
+                    .font(galmuriFont(18))
+                    .foregroundColor(fp.border)
+                Text(L10n.text("아래 내용을 순서대로 눌러 보세요", "Tap each card in order to learn the basics"))
+                    .font(galmuriFont(10))
+                    .foregroundColor(fp.inkDim)
+                    .multilineTextAlignment(.center)
+            }
+
+            HStack(spacing: 4) {
+                ForEach(onboardingPages) { page in
+                    Rectangle()
+                        .fill(page.id < onboardingStep ? fp.primary : fp.cell)
+                        .frame(height: 5)
+                        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 1))
+                }
+            }
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 7) {
+                    ForEach(onboardingPages) { page in
+                        onboardingStepCard(page)
+                    }
+                }
+                .padding(.vertical, 1)
+            }
+
+            popupActionButton(
+                L10n.text("확인", "OK"),
+                enabled: onboardingStep == onboardingPages.count,
+                action: finishOnboarding
+            )
+        }
+        .padding(14)
+        .frame(width: 352, height: 580)
+        .background(fp.panel)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        .accessibilityElement(children: .contain)
+    }
+
+    private func onboardingStepCard(_ page: OnboardingPage) -> some View {
+        let isCurrent = page.id == onboardingStep
+        let isCompleted = page.id < onboardingStep
+        return Button(action: { advanceOnboarding(to: page.id) }) {
+            HStack(spacing: 9) {
+                ZStack {
+                    Rectangle()
+                        .fill(isCompleted ? fp.primary : (isCurrent ? fp.primary.opacity(0.2) : fp.cell))
+                        .frame(width: 25, height: 25)
+                        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 2))
+                    if isCompleted {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(fp.primaryText)
+                    } else {
+                        Text("\(page.id + 1)")
+                            .font(galmuriFont(11))
+                            .foregroundColor(fp.border)
+                    }
+                }
+
+                onboardingAsset(page.asset)
+                    .frame(width: 52, height: 52)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(page.title)
+                        .font(galmuriFont(11))
+                        .foregroundColor(fp.border)
+                        .multilineTextAlignment(.leading)
+                    Text(page.description)
+                        .font(galmuriFont(9))
+                        .foregroundColor(fp.inkDim)
+                        .multilineTextAlignment(.leading)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Spacer(minLength: 0)
+
+                Image(systemName: isCompleted ? "checkmark.circle.fill" : (isCurrent ? "chevron.right" : "lock.fill"))
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(isCompleted ? fp.primary : (isCurrent ? fp.border : fp.inkDim))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, minHeight: 78, alignment: .leading)
+            .background(isCurrent || isCompleted ? fp.cell : fp.cell.opacity(0.65))
+            .overlay(Rectangle().strokeBorder(isCurrent ? fp.primary : fp.border, lineWidth: isCurrent ? 3 : 2))
+        }
+        .buttonStyle(.plain)
+        .disabled(!isCurrent)
+        .accessibilityLabel(page.title)
+        .accessibilityHint(
+            isCurrent
+                ? L10n.text("눌러서 다음 단계로 이동", "Tap to continue")
+                : (isCompleted ? L10n.text("완료됨", "Completed") : L10n.text("앞 단계부터 완료하세요", "Complete the previous steps first"))
+        )
+    }
+
+    @ViewBuilder
+    private func onboardingAsset(_ asset: OnboardingAsset) -> some View {
+        switch asset {
+        case .cat(let resource):
+            if let image = CatIdleCache.image(resource) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.none)
+                    .scaledToFit()
+                    .padding(3)
+            } else {
+                catIcon
+            }
+        case .crops:
+            HStack(spacing: 2) {
+                cropImage("carrot_growth_01", fallbackColor: fp.carrot, size: 24)
+                cropImage("cabbage_growth_01", fallbackColor: fp.cabbage, size: 24)
+            }
+        case .catHouse:
+            if let image = FabricAssetCache.image("cat_house") {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.none)
+                    .scaledToFit()
+                    .padding(2)
+            } else {
+                Image(systemName: "house.fill")
+                    .font(.system(size: 28))
+                    .foregroundColor(fp.inkDim)
+            }
+        case .cats(let resources):
+            HStack(spacing: 1) {
+                ForEach(resources, id: \.self) { resource in
+                    if let image = CatIdleCache.image(resource) {
+                        Image(nsImage: image)
+                            .resizable()
+                            .interpolation(.none)
+                            .scaledToFit()
+                    }
+                }
+            }
+            .padding(2)
+        }
+    }
+
+    private func advanceOnboarding(to step: Int) {
+        guard step == onboardingStep else { return }
+        onboardingStep += 1
+    }
+
+    private func finishOnboarding() {
+        guard onboardingStep == onboardingPages.count else { return }
+        state.completeOnboarding()
+        onOnboardingFinished()
     }
 
     // MARK: - 축소 화면 (레트로 픽셀 카드, 시안 축소화면.dc.html)
@@ -983,13 +1200,13 @@ struct OverlayView: View {
         let statusText: String = {
             if isUnlocked { return L10n.text("보유 중인 고양이", "Owned cat") }
             if cat.id == "oddeye" {
-                return L10n.text("당근 수확 시 0.1% 확률로 획득", "0.1% chance from harvesting carrots")
+                return L10n.text("당근 수확 시 0.0001% 확률로 획득", "0.0001% chance from harvesting carrots")
             }
             if cat.id == "cheese" {
-                return L10n.text("당근 수확 시 20% 확률로 획득", "20% chance from harvesting carrots")
+                return L10n.text("당근 수확 시 0.1% 확률로 획득", "0.1% chance from harvesting carrots")
             }
             if cat.id == "gray" {
-                return L10n.text("양배추 수확 시 20% 확률로 획득", "20% chance from harvesting cabbages")
+                return L10n.text("양배추 수확 시 0.1% 확률로 획득", "0.1% chance from harvesting cabbages")
             }
             return L10n.text("상점에서 구매할 수 있어요", "Available from the shop")
         }()

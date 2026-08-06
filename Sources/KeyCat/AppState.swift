@@ -185,6 +185,8 @@ final class AppState: ObservableObject {
             }
         }
     }
+    /// 최초 실행 시 표시되는 온보딩 화면의 표시 여부.
+    @Published private(set) var isOnboardingPresented: Bool
     /// 최초 30코인으로 시작하며 판매로 변경될 때마다 저장한다.
     @Published private(set) var coins: Int {
         didSet { UserDefaults.standard.set(coins, forKey: coinsKey) }
@@ -241,6 +243,7 @@ final class AppState: ObservableObject {
     private let seedInventoryKey = "seedInventory"
     private let cropInventoryKey = "cropInventory"
     private let unlockedCatIDsKey = "unlockedCatIDs"
+    private let onboardingCompletedKey = "onboardingCompleted"
     private let lastAppActiveAtKey = "lastAppActiveAt"
     private var growthTimer: Timer?
     private var lastHeartbeatWriteAt: Date?
@@ -250,6 +253,7 @@ final class AppState: ObservableObject {
     private var farmPanelVisible = true
 
     init() {
+        isOnboardingPresented = !UserDefaults.standard.bool(forKey: onboardingCompletedKey)
         if UserDefaults.standard.object(forKey: coinsKey) == nil {
             coins = 30
         } else {
@@ -318,6 +322,13 @@ final class AppState: ObservableObject {
         }
         startGrowthTimer()
         scheduleCollapsedFarmWorkIfNeeded()
+    }
+
+    /// 온보딩을 완료하고 다음 실행부터는 바로 농장 화면을 표시한다.
+    func completeOnboarding() {
+        guard isOnboardingPresented else { return }
+        UserDefaults.standard.set(true, forKey: onboardingCompletedKey)
+        isOnboardingPresented = false
     }
 
     /// 현재 선택된 고양이 캐릭터
@@ -609,9 +620,9 @@ final class AppState: ObservableObject {
         let dropRates: [(catID: String, probability: Double)]
         switch crop {
         case .carrot:
-            dropRates = [("cheese", 0.2), ("oddeye", 0.001)]
+            dropRates = [("cheese", 0.001), ("oddeye", 0.000001)] // 치즈 0.1%, 오드아이 0.0001%
         case .cabbage:
-            dropRates = [("gray", 0.2)]
+            dropRates = [("gray", 0.001)] // 그레이 0.1%
         }
         for drop in dropRates where !updatedIDs.contains(drop.catID) {
             if Double.random(in: 0..<1) < drop.probability {

@@ -36,7 +36,11 @@ func localizedCatName(_ id: String) -> String {
 }
 
 func catPurchasePrice(_ id: String) -> Int {
-    id == "siamese" ? 50_000 : 10_000
+    switch id {
+    case "siamese": return 100_000
+    case "sphynx": return 50_000
+    default: return 10_000
+    }
 }
 
 enum CatCatalog {
