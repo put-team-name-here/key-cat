@@ -19,8 +19,28 @@ struct CatCharacter: Identifiable {
     let harvestSheet: String
 }
 
+extension CatCharacter {
+    var localizedName: String { localizedCatName(id) }
+}
+
+func localizedCatName(_ id: String) -> String {
+    switch id {
+    case "cheese": return L10n.text("치즈", "Cheese")
+    case "gray": return L10n.text("그레이", "Gray")
+    case "siamese": return L10n.text("샴", "Siamese")
+    case "sphynx": return L10n.text("스핑크스", "Sphynx")
+    case "tuxedo": return L10n.text("턱시도", "Tuxedo")
+    case "oddeye": return L10n.text("오드아이", "Odd-eyed")
+    default: return id
+    }
+}
+
+func catPurchasePrice(_ id: String) -> Int {
+    id == "siamese" ? 50_000 : 10_000
+}
+
 enum CatCatalog {
-    /// assets/cats/ 6종을 Resources/cats/ 로 정규화해 이식한 목록.
+    /// Artwork/SourceAssets/cats의 6종을 Resources/cats로 정규화해 이식한 목록.
     static let all: [CatCharacter] = [
         .init(id: "cheese", name: "치즈", front: "cheese_front", leftSheet: "cheese_side", rightSheet: nil,
               wateringSheet: "cheese_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "cheese_harvest"),
@@ -44,7 +64,7 @@ struct SpriteSheet {
     let frames: [Image]
 
     init?(resource: String, columns: Int = 3, rows: Int = 3, frameCount: Int = 8) {
-        guard let url = Bundle.module.url(forResource: resource, withExtension: "png", subdirectory: "cats"),
+        guard let url = AppResources.bundle.url(forResource: resource, withExtension: "png", subdirectory: "cats"),
               let nsImg = NSImage(contentsOf: url),
               let cg = nsImg.cgImage(forProposedRect: nil, context: nil, hints: nil)
         else { return nil }
@@ -90,7 +110,7 @@ enum CatStatusAssetCache {
 
     static func image(_ name: String) -> NSImage? {
         if let image = cache[name] { return image }
-        guard let url = Bundle.module.url(forResource: name,
+        guard let url = AppResources.bundle.url(forResource: name,
                                           withExtension: "png",
                                           subdirectory: "gui"),
               let image = NSImage(contentsOf: url)
@@ -108,7 +128,7 @@ enum GroundCache {
 
     static func image(_ name: String) -> NSImage? {
         if let i = cache[name] { return i }
-        guard let url = Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "grounds"),
+        guard let url = AppResources.bundle.url(forResource: name, withExtension: "png", subdirectory: "grounds"),
               let img = NSImage(contentsOf: url) else { return nil }
         cache[name] = img
         return img
@@ -182,7 +202,10 @@ struct FarmFieldGrassView: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel("밭 \(r + 1)행 \(c + 1)열")
+                            .accessibilityLabel(L10n.text(
+                                "밭 \(r + 1)행 \(c + 1)열",
+                                "Farm row \(r + 1), column \(c + 1)"
+                            ))
                         } else {
                             let grass = field.tiles[r * FarmFieldData.cols + c].grass
                             if let edge = FarmFieldData.dryGroundBoundaryEdge(row: r, column: c) {
@@ -483,14 +506,17 @@ struct WalkingCat: View {
                     updateFarmTask()
                 }
                 .onDisappear { motion.stop() }
-                .onChange(of: geo.size) { newSize in
+                .onChange(of: geo.size) { _, newSize in
                     motion.configure(bounds: newSize, sprite: spriteSize)
                 }
                 .onChange(of: farmTask) { _, _ in
                     updateFarmTask()
                 }
         }
-        .accessibilityLabel("\(character.name) 고양이")
+        .accessibilityLabel(L10n.text(
+            "\(character.localizedName) 고양이",
+            "\(character.localizedName) cat"
+        ))
     }
 
     /// 오른쪽 전용 시트가 없을 때만 오른쪽 이동에서 좌우 반전한다.

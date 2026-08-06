@@ -8,6 +8,7 @@ let package = Package(
         .executableTarget(
             name: "KeyCat",
             path: "Sources/KeyCat",
+            exclude: ["Assets.xcassets"],
             resources: [
                 .copy("Resources/cats"),
                 .copy("Resources/fonts"),
@@ -15,6 +16,11 @@ let package = Package(
                 .copy("Resources/gui"),
                 .copy("Resources/fabrics"),
             ]
+        ),
+        .testTarget(
+            name: "KeyCatTests",
+            dependencies: ["KeyCat"],
+            path: "Tests/KeyCatTests"
         )
     ]
 )

@@ -16,7 +16,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menu: NSMenu!
     private var charsItem: NSMenuItem!
     private var coinsItem: NSMenuItem!
-    private var harvestItem: NSMenuItem!
     private var pauseItem: NSMenuItem!
     private var autoModeItem: NSMenuItem!
 
@@ -42,7 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Galmuri11 픽셀 폰트를 프로세스에 등록. 미등록 시 galmuriFont 가 시스템 폰트로 폴백된다.
     private func registerFonts() {
-        guard let url = Bundle.module.url(forResource: "Galmuri11", withExtension: "ttf", subdirectory: "fonts") else {
+        guard let url = AppResources.bundle.url(forResource: "Galmuri11", withExtension: "ttf", subdirectory: "fonts") else {
             NSLog("[KeyCat] Galmuri11.ttf 리소스를 찾지 못함")
             return
         }
@@ -66,33 +65,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu = NSMenu()
         menu.delegate = self
 
-        let farmItem = NSMenuItem(title: "농장 표시/숨김", action: #selector(togglePanel), keyEquivalent: "f")
+        let farmItem = NSMenuItem(
+            title: L10n.text("농장 표시/숨김", "Show/Hide Farm"),
+            action: #selector(togglePanel),
+            keyEquivalent: "f"
+        )
         farmItem.image = symbolImage("leaf", color: .systemGreen)
         menu.addItem(farmItem)
 
         menu.addItem(.separator())
 
-        charsItem = infoItem(title: "기록한 글자", symbol: "heart", color: .systemPink)
-        coinsItem = infoItem(title: "보유 코인", symbol: "centsign.circle", color: .systemYellow)
-        harvestItem = infoItem(title: "수확 가능 여부", symbol: "carrot", color: .systemGreen)
+        charsItem = infoItem(title: L10n.text("기록한 글자", "Characters Typed"), symbol: "heart", color: .systemPink)
+        coinsItem = infoItem(title: L10n.text("보유 코인", "Coins Owned"), symbol: "centsign.circle", color: .systemYellow)
         menu.addItem(charsItem)
         menu.addItem(coinsItem)
-        menu.addItem(harvestItem)
 
         menu.addItem(.separator())
-        menu.addItem(.sectionHeader(title: "설정"))
+        menu.addItem(.sectionHeader(title: L10n.text("설정", "Settings")))
 
-        pauseItem = NSMenuItem(title: "기록 일시 정지", action: #selector(togglePause), keyEquivalent: "p")
+        pauseItem = NSMenuItem(
+            title: L10n.text("기록 일시 정지", "Pause Tracking"),
+            action: #selector(togglePause),
+            keyEquivalent: "p"
+        )
         pauseItem.image = symbolImage("pause", color: .white)
         menu.addItem(pauseItem)
 
-        autoModeItem = NSMenuItem(title: "오토 모드", action: #selector(toggleAutoMode), keyEquivalent: "a")
+        autoModeItem = NSMenuItem(
+            title: L10n.text("오토 모드", "Auto Mode"),
+            action: #selector(toggleAutoMode),
+            keyEquivalent: "a"
+        )
         autoModeItem.image = symbolImage("gearshape.2", color: .systemGreen)
         menu.addItem(autoModeItem)
 
-        let quitItem = NSMenuItem(title: "프로그램 종료", action: #selector(quit), keyEquivalent: "q")
+        let quitTitle = L10n.text("프로그램 종료", "Quit KeyCat")
+        let quitItem = NSMenuItem(title: quitTitle, action: #selector(quit), keyEquivalent: "q")
         quitItem.attributedTitle = NSAttributedString(
-            string: "프로그램 종료",
+            string: quitTitle,
             attributes: [.foregroundColor: NSColor.systemRed, .font: NSFont.menuFont(ofSize: 0)]
         )
         quitItem.image = symbolImage("rectangle.portrait.and.arrow.right", color: .systemRed)
@@ -114,7 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func menuBarIcon() -> NSImage? {
-        guard let url = Bundle.module.url(forResource: "menu_bar_cat", withExtension: "png", subdirectory: "gui"),
+        guard let url = AppResources.bundle.url(forResource: "menu_bar_cat", withExtension: "png", subdirectory: "gui"),
               let image = NSImage(contentsOf: url) else { return nil }
         image.size = NSSize(width: 20, height: 20)
         image.isTemplate = false
@@ -218,12 +228,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 extension AppDelegate: NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
-        charsItem.badge = NSMenuItemBadge(string: "\(counter.count)자")
+        charsItem.badge = NSMenuItemBadge(string: L10n.characters(counter.count))
         coinsItem.badge = NSMenuItemBadge(string: "\(state.coins)")
-        harvestItem.badge = NSMenuItemBadge(string: state.harvestAvailable ? "가능" : "대기 중")
-        pauseItem.title = counter.isPaused ? "기록 재개" : "기록 일시 정지"
+        pauseItem.title = counter.isPaused
+            ? L10n.text("기록 재개", "Resume Tracking")
+            : L10n.text("기록 일시 정지", "Pause Tracking")
         pauseItem.image = symbolImage(counter.isPaused ? "play" : "pause", color: .white)
         autoModeItem.state = state.autoModeEnabled ? .on : .off
-        autoModeItem.title = state.autoModeEnabled ? "오토 모드 끄기" : "오토 모드 켜기"
+        autoModeItem.title = state.autoModeEnabled
+            ? L10n.text("오토 모드 끄기", "Turn Off Auto Mode")
+            : L10n.text("오토 모드 켜기", "Turn On Auto Mode")
     }
 }

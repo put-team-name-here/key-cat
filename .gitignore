@@ -1,6 +1,8 @@
 .build/
 .swiftpm/
-*.xcodeproj
+xcuserdata/
+*.xcuserstate
+DerivedData/
 .DS_Store
 .idea/
 scratchpad/
