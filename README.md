@@ -1,5 +1,4 @@
 # KeyCat
-
 타이핑으로 농사짓는 맥 오버레이 위젯 **keycat**의 기술 검증(PoC). 오버레이 상시 표시와 전역 타자 카운트라는 두 핵심 리스크 검증에서 출발해, 지금은 씨앗 구매 → 파종 → 급수 → 성장 → 수확 → 판매로 이어지는 농장 루프와 고양이 수집 요소까지 갖춘 상태다.
 macOS 14 이상을 지원합니다.
 
@@ -16,6 +15,32 @@ macOS 14 이상을 지원합니다.
 ## 배포
 
 이 앱은 전역 키 입력을 감지하므로 Mac App Store 샌드박스 배포 대상이 아닙니다. Developer ID로 직접 배포하고 Apple 공증을 거치는 방식을 사용합니다.
+
+1. [Config/Release.xcconfig](Config/Release.xcconfig)의 `PRODUCT_BUNDLE_IDENTIFIER`를 본인 소유 식별자로 변경합니다.
+2. Xcode의 KeyCat 타깃에서 Team과 `Developer ID Application` 인증서를 설정합니다.
+3. 메뉴에서 Product > Archive를 실행합니다.
+4. Organizer에서 Distribute App > Developer ID > Upload를 선택해 공증합니다.
+5. 공증 완료 후 Export한 앱을 DMG 또는 ZIP으로 배포합니다.
+
+버전은 `MARKETING_VERSION`, 빌드 번호는 `CURRENT_PROJECT_VERSION`에서 관리합니다.
+
+## 구조
+
+```text
+keyboard-game/
+├── KeyCat.xcodeproj/          # Xcode 앱 프로젝트와 공유 Scheme
+├── Config/                    # 번들 ID, 버전, 서명, entitlement 설정
+├── Sources/KeyCat/            # 앱 Swift 소스
+│   └── Resources/             # 실제 앱 번들에 포함되는 런타임 리소스
+├── Artwork/SourceAssets/      # 앱에 포함되지 않는 원본/후보 그래픽
+├── Documentation/Handoff/     # 과거 작업 인수인계 기록
+├── Package.swift              # CLI 개발용 Swift Package 호환 설정
+└── README.md
+```
+
+리소스를 앱에서 사용하려면 `Sources/KeyCat/Resources`의 알맞은 하위 폴더에 넣고 Xcode 프로젝트의 Resources 빌드 단계에 포함된 폴더인지 확인합니다. `Artwork/SourceAssets` 파일은 자동으로 앱에 포함되지 않습니다.
+
+## CLI 개발
 
 1. [Config/Release.xcconfig](Config/Release.xcconfig)의 `PRODUCT_BUNDLE_IDENTIFIER`를 본인 소유 식별자로 변경합니다.
 2. Xcode의 KeyCat 타깃에서 Team과 `Developer ID Application` 인증서를 설정합니다.
@@ -58,8 +83,6 @@ swift run
 ```
 
 배포 및 권한 검증은 반드시 Xcode에서 생성한 `.app`으로 수행합니다.
-
-## 주요 파일
 
 밭 잔디는 짙은 잔디/꽃 잔디를 **랜덤 배치**하고, 그 배치와 칸별 상태를
 `~/Library/Application Support/KeyCat/farm.json`(8열×12행)에 저장해 재실행 후에도 복원한다.

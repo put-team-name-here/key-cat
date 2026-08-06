@@ -7,9 +7,9 @@ final class BalanceTests: XCTestCase {
         XCTAssertEqual(SeedKind.cabbage.growthDuration, 300)
     }
 
-    func testSiameseCatCostsFiftyThousandCoins() {
-        XCTAssertEqual(catPurchasePrice("siamese"), 50_000)
-        XCTAssertEqual(catPurchasePrice("sphynx"), 10_000)
+    func testCatPurchasePricesMatchBalance() {
+        XCTAssertEqual(catPurchasePrice("siamese"), 100_000)
+        XCTAssertEqual(catPurchasePrice("sphynx"), 50_000)
     }
 
     func testKoreanAndEnglishTranslationsAreAvailable() {
