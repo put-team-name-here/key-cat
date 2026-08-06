@@ -2,28 +2,51 @@ import Foundation
 
 /// 확장 화면 하단 탭.
 enum FarmTab: String, CaseIterable, Identifiable {
-    case shop = "상점"
-    case storage = "창고"
-    case codex = "도감"
-    case log = "기록"
+    case shop
+    case storage
+    case codex
+    case log
 
     var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .shop: return L10n.text("상점", "Shop")
+        case .storage: return L10n.text("창고", "Storage")
+        case .codex: return L10n.text("도감", "Collection")
+        case .log: return L10n.text("기록", "Log")
+        }
+    }
 }
 
 /// 도감 내부 카테고리.
 enum CodexCategory: String, CaseIterable, Identifiable {
-    case crops = "작물"
-    case cats = "고양이"
+    case crops
+    case cats
 
     var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .crops: return L10n.text("작물", "Crops")
+        case .cats: return L10n.text("고양이", "Cats")
+        }
+    }
 }
 
 /// 상점 내부 상품 카테고리.
 enum ShopCategory: String, CaseIterable, Identifiable {
-    case seeds = "씨앗"
-    case cats = "고양이"
+    case seeds
+    case cats
 
     var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .seeds: return L10n.text("씨앗", "Seeds")
+        case .cats: return L10n.text("고양이", "Cats")
+        }
+    }
 }
 
 /// 상점에서 구매하고 창고에 보관하는 씨앗 종류.
@@ -35,8 +58,8 @@ enum SeedKind: String, CaseIterable, Codable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .carrot: return "당근 씨앗"
-        case .cabbage: return "양배추 씨앗"
+        case .carrot: return L10n.text("당근 씨앗", "Carrot Seeds")
+        case .cabbage: return L10n.text("양배추 씨앗", "Cabbage Seeds")
         }
     }
 
@@ -61,11 +84,18 @@ enum SeedKind: String, CaseIterable, Codable, Identifiable {
         }
     }
 
-    /// 상점 카드에만 사용하는 안내용 성장시간. 실제 성장 타이머와는 무관하다.
+    /// 급수 완료부터 수확 가능 상태가 될 때까지 걸리는 실제 성장 시간.
+    var growthDuration: TimeInterval {
+        switch self {
+        case .carrot: return 2 * 60
+        case .cabbage: return 5 * 60
+        }
+    }
+
     var displayedGrowthTime: String {
         switch self {
-        case .carrot: return "2분"
-        case .cabbage: return "5분"
+        case .carrot: return L10n.minutes(2)
+        case .cabbage: return L10n.minutes(5)
         }
     }
 }
@@ -99,8 +129,8 @@ enum CropKind: String, CaseIterable, Codable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .carrot: return "당근"
-        case .cabbage: return "양배추"
+        case .carrot: return L10n.text("당근", "Carrot")
+        case .cabbage: return L10n.text("양배추", "Cabbage")
         }
     }
 
@@ -145,7 +175,6 @@ struct CatUnlockNotice: Identifiable {
 
 /// 축소/확장 + 농장 자원 상태를 담는 가벼운 상태 객체
 final class AppState: ObservableObject {
-    private static let cropGrowthInterval: TimeInterval = 5
     @Published var expanded = false {
         didSet {
             if shouldProcessFarmWorkInBackground {
@@ -607,7 +636,7 @@ final class AppState: ObservableObject {
         growthTimer = timer
     }
 
-    /// 급수 후 5초마다 01 → 02 → 03 이미지로 한 단계씩 성장시킨다.
+    /// 작물별 성장시간의 절반에 02, 전체 시간이 지나면 03 이미지로 성장시킨다.
     private func advanceGrowth(now: Date = Date()) {
         writeActivityHeartbeatIfNeeded(at: now)
         var updatedField = farmField
@@ -617,12 +646,15 @@ final class AppState: ObservableObject {
             let tile = updatedField.tiles[index]
             guard tile.state == .wateredCarrotSeed || tile.state == .wateredCabbageSeed
                     || tile.state == .growingCarrot || tile.state == .growingCabbage,
-                  let wateredAt = tile.wateredAt,
-                  now.timeIntervalSince(wateredAt) >= Self.cropGrowthInterval
+                  let wateredAt = tile.wateredAt
             else { continue }
 
             let elapsed = now.timeIntervalSince(wateredAt)
-            if elapsed >= Self.cropGrowthInterval * 2 {
+            let seed: SeedKind = (tile.state == .wateredCarrotSeed || tile.state == .growingCarrot)
+                ? .carrot
+                : .cabbage
+            let growthDuration = seed.growthDuration
+            if elapsed >= growthDuration {
                 updatedField.tiles[index].state = (tile.state == .wateredCarrotSeed || tile.state == .growingCarrot)
                     ? .matureCarrot
                     : .matureCabbage
@@ -631,7 +663,8 @@ final class AppState: ObservableObject {
                     tile: FarmTileCoordinate(row: index / FarmFieldData.cols,
                                              column: index % FarmFieldData.cols)
                 ))
-            } else if tile.state == .wateredCarrotSeed || tile.state == .wateredCabbageSeed {
+            } else if elapsed >= growthDuration / 2,
+                      tile.state == .wateredCarrotSeed || tile.state == .wateredCabbageSeed {
                 updatedField.tiles[index].state = tile.state == .wateredCarrotSeed
                     ? .growingCarrot
                     : .growingCabbage

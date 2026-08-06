@@ -62,9 +62,9 @@ swift run
 ## 배포 전 확인
 
 - Release 번들 ID와 Team이 본인 계정으로 설정되어 있는지 확인
-- 앱 아이콘 추가 여부 확인
+- AppIcon이 올바르게 표시되는지 확인
 - 입력 모니터링 권한 허용/거부 흐름을 실제 Mac에서 확인
 - 다른 앱, 전체 화면, 여러 Space에서 오버레이 동작 확인
 - Archive 결과가 Developer ID로 서명되고 공증되었는지 확인
 
-현재 앱 아이콘은 별도 Asset Catalog가 없어 기본 아이콘으로 빌드됩니다. 최종 배포 전 1024×1024 원본으로 AppIcon을 추가해야 합니다.
+앱 아이콘 원본은 `Artwork/AppIcon/keycat_app_icon.png`, Xcode용 크기별 결과는 `Sources/KeyCat/Assets.xcassets/AppIcon.appiconset`에서 관리합니다. 현재 원본은 512×512이며, 최종 배포 품질을 위해서는 1024×1024 이상 원본을 권장합니다.

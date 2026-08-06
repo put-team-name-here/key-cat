@@ -48,22 +48,24 @@ enum CatIdleCache {
 
 private struct CodexCatEntry: Identifiable {
     let id: String
-    let name: String
     let idleResource: String
+
+    var name: String { localizedCatName(id) }
+    var purchasePrice: Int { catPurchasePrice(id) }
 }
 
 private let codexCats: [CodexCatEntry] = [
-    .init(id: "siamese", name: "샴", idleResource: "siamese_idle"),
-    .init(id: "sphynx", name: "스핑크스", idleResource: "sphynx_idle"),
-    .init(id: "cheese", name: "치즈", idleResource: "cheese_idle"),
-    .init(id: "tuxedo", name: "턱시도", idleResource: "tuxedo_idle"),
-    .init(id: "oddeye", name: "오드아이", idleResource: "oddeye_idle"),
-    .init(id: "gray", name: "그레이", idleResource: "gray_idle"),
+    .init(id: "siamese", idleResource: "siamese_idle"),
+    .init(id: "sphynx", idleResource: "sphynx_idle"),
+    .init(id: "cheese", idleResource: "cheese_idle"),
+    .init(id: "tuxedo", idleResource: "tuxedo_idle"),
+    .init(id: "oddeye", idleResource: "oddeye_idle"),
+    .init(id: "gray", idleResource: "gray_idle"),
 ]
 
 private let shopCats: [CodexCatEntry] = [
-    .init(id: "siamese", name: "샴", idleResource: "siamese_idle"),
-    .init(id: "sphynx", name: "스핑크스", idleResource: "sphynx_idle"),
+    .init(id: "siamese", idleResource: "siamese_idle"),
+    .init(id: "sphynx", idleResource: "sphynx_idle"),
 ]
 
 /// Simple triangle shape used for pixel-style cat ears.
@@ -142,7 +144,7 @@ struct OverlayView: View {
                     .shadow(color: Color.black.opacity(0.25), radius: 0, x: 2, y: 2)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("고양이 변경")
+            .accessibilityLabel(L10n.text("고양이 변경", "Change cat"))
             .offset(x: 10, y: 10)
         }
         .frame(width: 118, height: 118, alignment: .topLeading)
@@ -177,7 +179,7 @@ struct OverlayView: View {
             infoTile {
                 keyboardGlyph
                 Spacer(minLength: 0)
-                Text("\(counter.count)자")
+                Text(L10n.characters(counter.count))
                     .font(galmuriFont(14)).foregroundColor(rt.text)
             }
 
@@ -211,7 +213,7 @@ struct OverlayView: View {
                 .interpolation(.none)
                 .scaledToFit()
                 .frame(width: 22, height: 22)
-                .accessibilityLabel("타자 수")
+                .accessibilityLabel(L10n.text("타자 수", "Keystroke count"))
         } else {
             legacyKeyboardGlyph
         }
@@ -225,7 +227,7 @@ struct OverlayView: View {
                 .interpolation(.none)
                 .scaledToFit()
                 .frame(width: 22, height: 22)
-                .accessibilityLabel("보유 코인")
+                .accessibilityLabel(L10n.text("보유 코인", "Coins owned"))
         } else {
             legacyCoinGlyph
         }
@@ -403,7 +405,7 @@ struct OverlayView: View {
         let ownedSeeds = SeedKind.allCases.filter { state.seedCount($0) > 0 }
         return VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
-                Text("심을 씨앗")
+                Text(L10n.text("심을 씨앗", "Choose seeds"))
                     .font(galmuriFont(12))
                     .foregroundColor(fp.border)
                 Spacer(minLength: 0)
@@ -417,7 +419,7 @@ struct OverlayView: View {
             }
 
             if ownedSeeds.isEmpty {
-                Text("창고에 보유한 씨앗이 없어요")
+                Text(L10n.text("창고에 보유한 씨앗이 없어요", "There are no seeds in storage"))
                     .font(galmuriFont(9))
                     .foregroundColor(fp.inkDim)
                     .padding(.vertical, 5)
@@ -430,7 +432,7 @@ struct OverlayView: View {
                                 .font(galmuriFont(10))
                                 .foregroundColor(fp.border)
                             Spacer(minLength: 0)
-                            Text("\(state.seedCount(seed))개")
+                            Text(L10n.count(state.seedCount(seed)))
                                 .font(galmuriFont(9))
                                 .foregroundColor(fp.inkDim)
                         }
@@ -498,7 +500,7 @@ struct OverlayView: View {
             Rectangle().fill(fp.border).frame(height: 3)
             HStack(spacing: 12) {
                 keyboardGlyph
-                Text("\(counter.count)자")
+                Text(L10n.characters(counter.count))
                     .font(galmuriFont(15)).foregroundColor(fp.barText)
                 Spacer(minLength: 0)
                 Text("|").foregroundColor(fp.barDim)
@@ -605,11 +607,14 @@ struct OverlayView: View {
     private var logContent: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("\(currentMonthNumber)월 기록")
+                Text(currentMonthTitle)
                     .font(galmuriFont(14))
                     .foregroundColor(fp.border)
                 Spacer(minLength: 0)
-                Text("연속 \(currentTypingStreak)일 · 이번 달 \(currentMonthTypingCount)타")
+                Text(L10n.text(
+                    "연속 \(currentTypingStreak)일 · 이번 달 \(currentMonthTypingCount)타",
+                    "\(currentTypingStreak)-day streak · \(currentMonthTypingCount) keys this month"
+                ))
                     .font(galmuriFont(11))
                     .foregroundColor(fp.inkDim)
             }
@@ -627,7 +632,7 @@ struct OverlayView: View {
             .background(fp.cell)
 
             HStack(spacing: 4) {
-                Text("적음")
+                Text(L10n.text("적음", "Less"))
                     .font(galmuriFont(8))
                     .foregroundColor(fp.inkDim)
                 ForEach([0, 50, 250, 750, 1500], id: \.self) { count in
@@ -636,11 +641,11 @@ struct OverlayView: View {
                         .frame(width: 11, height: 11)
                         .overlay(Rectangle().strokeBorder(fp.border.opacity(0.35), lineWidth: 1))
                 }
-                Text("많음")
+                Text(L10n.text("많음", "More"))
                     .font(galmuriFont(8))
                     .foregroundColor(fp.inkDim)
                 Spacer(minLength: 0)
-                Text("날짜를 눌러 확인")
+                Text(L10n.text("날짜를 눌러 확인", "Select a date"))
                     .font(galmuriFont(8))
                     .foregroundColor(fp.inkDim)
             }
@@ -649,6 +654,14 @@ struct OverlayView: View {
 
     private var currentMonthNumber: Int {
         Calendar.current.component(.month, from: Date())
+    }
+
+    private var currentMonthTitle: String {
+        guard AppLanguage.current == .english else { return "\(currentMonthNumber)월 기록" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US")
+        formatter.setLocalizedDateFormatFromTemplate("MMMM")
+        return "\(formatter.string(from: Date())) Log"
     }
 
     private var currentMonthTypingCount: Int {
@@ -695,7 +708,7 @@ struct OverlayView: View {
                     .overlay(Rectangle().strokeBorder(fp.border.opacity(0.4), lineWidth: 1))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(typingDateText(date)), \(typingCount)타")
+            .accessibilityLabel("\(typingDateText(date)), \(L10n.keystrokes(typingCount))")
         }
     }
 
@@ -711,16 +724,16 @@ struct OverlayView: View {
     }
 
     private func typingDateText(_ date: Date) -> String {
-        let components = Calendar.current.dateComponents([.month, .day, .weekday], from: date)
-        let weekdays = ["일", "월", "화", "수", "목", "금", "토"]
-        let weekdayIndex = max(1, min(7, components.weekday ?? 1)) - 1
-        return "\(components.month ?? 0)월 \(components.day ?? 0)일 (\(weekdays[weekdayIndex]))"
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: AppLanguage.current == .korean ? "ko_KR" : "en_US")
+        formatter.setLocalizedDateFormatFromTemplate("MMM d EEE")
+        return formatter.string(from: date)
     }
 
     private func typingRecordPopup(for date: Date) -> some View {
         let typingCount = counter.count(on: date)
         return VStack(spacing: 16) {
-            popupHeader("타자 기록") { selectedTypingDate = nil }
+            popupHeader(L10n.text("타자 기록", "Typing Log")) { selectedTypingDate = nil }
             Rectangle()
                 .fill(streakColor(for: typingCount))
                 .frame(width: 48, height: 48)
@@ -728,10 +741,10 @@ struct OverlayView: View {
             Text(typingDateText(date))
                 .font(galmuriFont(13))
                 .foregroundColor(fp.border)
-            Text("\(typingCount)타")
+            Text(L10n.keystrokes(typingCount))
                 .font(galmuriFont(22))
                 .foregroundColor(fp.border)
-            popupActionButton("확인", enabled: true) {
+            popupActionButton(L10n.text("확인", "OK"), enabled: true) {
                 selectedTypingDate = nil
             }
         }
@@ -754,7 +767,7 @@ struct OverlayView: View {
     private func codexCategoryButton(_ category: CodexCategory) -> some View {
         let active = state.selectedCodexCategory == category
         return Button(action: { state.selectedCodexCategory = category }) {
-            Text(category.rawValue)
+            Text(category.displayName)
                 .font(galmuriFont(14))
                 .foregroundColor(active ? fp.primaryText : fp.border)
                 .padding(.horizontal, 12).padding(.vertical, 5)
@@ -767,7 +780,7 @@ struct OverlayView: View {
     private func shopCategoryButton(_ category: ShopCategory) -> some View {
         let active = state.selectedShopCategory == category
         return Button(action: { state.selectedShopCategory = category }) {
-            Text(category.rawValue)
+            Text(category.displayName)
                 .font(galmuriFont(14))
                 .foregroundColor(active ? fp.primaryText : fp.border)
                 .padding(.horizontal, 12).padding(.vertical, 5)
@@ -808,7 +821,10 @@ struct OverlayView: View {
             .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(seed.displayName) 구매 수량 선택")
+        .accessibilityLabel(L10n.text(
+            "\(seed.displayName) 구매 수량 선택",
+            "Choose quantity of \(seed.displayName) to buy"
+        ))
     }
 
     private func shopCatItem(_ cat: CodexCatEntry) -> some View {
@@ -823,7 +839,7 @@ struct OverlayView: View {
                 HStack(spacing: 2) {
                     Circle().fill(rt.yellow).frame(width: 10, height: 10)
                         .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
-                    Text("10000")
+                    Text(L10n.number(cat.purchasePrice))
                         .font(galmuriFont(9))
                         .foregroundColor(fp.border)
                 }
@@ -834,7 +850,10 @@ struct OverlayView: View {
             .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(cat.name), 10000코인에 구매")
+        .accessibilityLabel(L10n.text(
+            "\(cat.name), \(L10n.number(cat.purchasePrice))코인에 구매",
+            "Buy \(cat.name) for \(L10n.number(cat.purchasePrice)) coins"
+        ))
     }
 
     @ViewBuilder private func catProductImage(_ cat: CodexCatEntry, size: CGFloat) -> some View {
@@ -852,18 +871,23 @@ struct OverlayView: View {
     private func seedPurchasePopup(for seed: SeedKind) -> some View {
         let totalPrice = seed.purchasePrice * purchaseQuantity
         let canPurchase = state.coins >= totalPrice
-        let maxAffordableQuantity = max(1, min(99, state.coins / seed.purchasePrice))
+        let maxAffordableQuantity = max(1, state.coins / seed.purchasePrice)
         return VStack(spacing: 14) {
-            popupHeader("\(seed.displayName) 구매") { selectedSeedForPurchase = nil }
+            popupHeader(L10n.text("\(seed.displayName) 구매", "Buy \(seed.displayName)")) {
+                selectedSeedForPurchase = nil
+            }
             cropImage(seed.growthImageName, fallbackColor: seedColor(seed), size: 48)
-            Text("현재 보유 \(state.seedCount(seed))개")
+            Text(L10n.text(
+                "현재 보유 \(state.seedCount(seed))개",
+                "Owned: \(state.seedCount(seed))"
+            ))
                 .font(galmuriFont(11))
                 .foregroundColor(fp.inkDim)
             HStack(spacing: 12) {
                 quantityButton(systemName: "minus", enabled: purchaseQuantity > 1) {
                     purchaseQuantity -= 1
                 }
-                Text("\(purchaseQuantity)개")
+                Text(L10n.count(purchaseQuantity))
                     .font(galmuriFont(16))
                     .foregroundColor(fp.border)
                     .frame(minWidth: 58)
@@ -876,7 +900,10 @@ struct OverlayView: View {
                     purchaseQuantity = maxAffordableQuantity
                 }
             }
-            popupActionButton("\(totalPrice)코인에 구매", enabled: canPurchase) {
+            popupActionButton(L10n.text(
+                "\(totalPrice)코인에 구매",
+                "Buy for \(totalPrice) coins"
+            ), enabled: canPurchase) {
                 if state.purchase(seed, quantity: purchaseQuantity) {
                     selectedSeedForPurchase = nil
                 }
@@ -892,14 +919,26 @@ struct OverlayView: View {
     private func catPurchasePopup(for cat: CodexCatEntry) -> some View {
         let alreadyOwned = state.isCatUnlocked(id: cat.id)
         return VStack(spacing: 14) {
-            popupHeader("\(cat.name) 구매") { selectedCatForPurchase = nil }
+            popupHeader(L10n.text("\(cat.name) 구매", "Buy \(cat.name)")) {
+                selectedCatForPurchase = nil
+            }
             catProductImage(cat, size: 64)
-            Text("가격 10000코인")
+            Text(L10n.text(
+                "가격 \(L10n.number(cat.purchasePrice))코인",
+                "Price: \(L10n.number(cat.purchasePrice)) coins"
+            ))
                 .font(galmuriFont(11))
                 .foregroundColor(fp.inkDim)
-            popupActionButton(alreadyOwned ? "보유 중" : "10000코인에 구매",
-                              enabled: !alreadyOwned && state.coins >= 10_000) {
-                if state.purchaseCat(id: cat.id, unitPrice: 10_000) {
+            popupActionButton(
+                alreadyOwned
+                    ? L10n.text("보유 중", "Owned")
+                    : L10n.text(
+                        "\(L10n.number(cat.purchasePrice))코인에 구매",
+                        "Buy for \(L10n.number(cat.purchasePrice)) coins"
+                    ),
+                enabled: !alreadyOwned && state.coins >= cat.purchasePrice
+            ) {
+                if state.purchaseCat(id: cat.id, unitPrice: cat.purchasePrice) {
                     selectedCatForPurchase = nil
                 }
             }
@@ -913,10 +952,10 @@ struct OverlayView: View {
 
     private func catUnlockPopup(notice: CatUnlockNotice, cat: CodexCatEntry) -> some View {
         let message = notice.source == .harvest
-            ? "수확 중 새로운 고양이를 만났어요!"
-            : "상점에서 새로운 고양이를 데려왔어요!"
+            ? L10n.text("수확 중 새로운 고양이를 만났어요!", "You met a new cat while harvesting!")
+            : L10n.text("상점에서 새로운 고양이를 데려왔어요!", "You brought home a new cat from the shop!")
         return VStack(spacing: 13) {
-            Text("새 고양이 획득!")
+            Text(L10n.text("새 고양이 획득!", "New Cat!"))
                 .font(galmuriFont(17))
                 .foregroundColor(fp.border)
             catProductImage(cat, size: 104)
@@ -927,7 +966,7 @@ struct OverlayView: View {
                 .font(galmuriFont(10))
                 .foregroundColor(fp.inkDim)
                 .multilineTextAlignment(.center)
-            popupActionButton("확인", enabled: true) {
+            popupActionButton(L10n.text("확인", "OK"), enabled: true) {
                 state.dismissCatUnlockNotice()
             }
         }
@@ -942,21 +981,23 @@ struct OverlayView: View {
         let isUnlocked = state.isCatUnlocked(id: cat.id)
         let isSelected = state.selectedCat.id == cat.id
         let statusText: String = {
-            if isUnlocked { return "보유 중인 고양이" }
+            if isUnlocked { return L10n.text("보유 중인 고양이", "Owned cat") }
             if cat.id == "oddeye" {
-                return "당근 수확 시 0.1% 확률로 획득"
+                return L10n.text("당근 수확 시 0.1% 확률로 획득", "0.1% chance from harvesting carrots")
             }
             if cat.id == "cheese" {
-                return "당근 수확 시 20% 확률로 획득"
+                return L10n.text("당근 수확 시 20% 확률로 획득", "20% chance from harvesting carrots")
             }
             if cat.id == "gray" {
-                return "양배추 수확 시 20% 확률로 획득"
+                return L10n.text("양배추 수확 시 20% 확률로 획득", "20% chance from harvesting cabbages")
             }
-            return "상점에서 구매할 수 있어요"
+            return L10n.text("상점에서 구매할 수 있어요", "Available from the shop")
         }()
         let buttonTitle = isSelected
-            ? "현재 사용 중"
-            : (isUnlocked ? "이 고양이로 변경하기" : "아직 획득하지 못했어요")
+            ? L10n.text("현재 사용 중", "Currently selected")
+            : (isUnlocked
+                ? L10n.text("이 고양이로 변경하기", "Select this cat")
+                : L10n.text("아직 획득하지 못했어요", "Not yet unlocked"))
 
         return VStack(spacing: 14) {
             popupHeader(cat.name) { selectedCodexCat = nil }
@@ -1015,7 +1056,7 @@ struct OverlayView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .multilineTextAlignment(.center)
-            Text("\(state.seedCount(seed))개")
+            Text(L10n.count(state.seedCount(seed)))
                 .font(galmuriFont(10)).foregroundColor(fp.inkDim)
         }
         .padding(.horizontal, 5).padding(.vertical, 5)
@@ -1030,7 +1071,10 @@ struct OverlayView: View {
                 cropImage(crop.imageName, fallbackColor: crop == .carrot ? fp.carrot : fp.cabbage, size: 28)
                 Text(crop.displayName)
                     .font(galmuriFont(9)).foregroundColor(fp.border)
-                Text("\(state.cropCount(crop))개 · \(crop.salePrice)코인")
+                Text(L10n.text(
+                    "\(state.cropCount(crop))개 · \(crop.salePrice)코인",
+                    "\(state.cropCount(crop)) · \(crop.salePrice) coins"
+                ))
                     .font(galmuriFont(9)).foregroundColor(fp.inkDim)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -1041,7 +1085,10 @@ struct OverlayView: View {
             .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(crop.displayName) 판매 수량 선택")
+        .accessibilityLabel(L10n.text(
+            "\(crop.displayName) 판매 수량 선택",
+            "Choose quantity of \(crop.displayName) to sell"
+        ))
     }
 
     private func openSalePopup(for crop: CropKind) {
@@ -1054,7 +1101,7 @@ struct OverlayView: View {
         let totalPrice = crop.salePrice * saleQuantity
         return VStack(spacing: 14) {
             HStack {
-                Text("\(crop.displayName) 판매")
+                Text(L10n.text("\(crop.displayName) 판매", "Sell \(crop.displayName)"))
                     .font(galmuriFont(15))
                     .foregroundColor(fp.border)
                 Spacer(minLength: 0)
@@ -1069,7 +1116,7 @@ struct OverlayView: View {
 
             cropImage(crop.imageName, fallbackColor: crop == .carrot ? fp.carrot : fp.cabbage, size: 48)
 
-            Text("보유 수량 \(ownedCount)개")
+            Text(L10n.text("보유 수량 \(ownedCount)개", "Owned: \(ownedCount)"))
                 .font(galmuriFont(11))
                 .foregroundColor(fp.inkDim)
 
@@ -1077,7 +1124,7 @@ struct OverlayView: View {
                 quantityButton(systemName: "minus", enabled: saleQuantity > 1) {
                     saleQuantity -= 1
                 }
-                Text("\(saleQuantity)개")
+                Text(L10n.count(saleQuantity))
                     .font(galmuriFont(16))
                     .foregroundColor(fp.border)
                     .frame(minWidth: 58)
@@ -1094,7 +1141,7 @@ struct OverlayView: View {
                     selectedCropForSale = nil
                 }
             }) {
-                Text("\(totalPrice)코인에 판매")
+                Text(L10n.text("\(totalPrice)코인에 판매", "Sell for \(totalPrice) coins"))
                     .font(galmuriFont(13))
                     .foregroundColor(fp.primaryText)
                     .frame(maxWidth: .infinity)
@@ -1190,7 +1237,10 @@ struct OverlayView: View {
             .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(cat.name) 고양이 상세 보기")
+        .accessibilityLabel(L10n.text(
+            "\(cat.name) 고양이 상세 보기",
+            "View details for \(cat.name)"
+        ))
     }
 
     @ViewBuilder private func catIdleImage(_ resource: String) -> some View {
@@ -1244,7 +1294,7 @@ struct OverlayView: View {
                 ForEach(FarmTab.allCases) { tab in
                     let active = state.selectedFarmTab == tab
                     Button(action: { state.selectedFarmTab = tab }) {
-                        Text(tab.rawValue)
+                        Text(tab.displayName)
                             .font(galmuriFont(14))
                             .foregroundColor(active ? fp.primaryText : fp.border)
                             .frame(maxWidth: .infinity)

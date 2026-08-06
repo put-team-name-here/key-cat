@@ -39,15 +39,23 @@ final class KeyCounter: ObservableObject {
     }
 
     func start() {
-        // 입력 모니터링 권한 사전 확인 및 요청 (macOS 10.15+)
-        permissionGranted = CGPreflightListenEventAccess()
-        if !permissionGranted {
-            CGRequestListenEventAccess()
+        if CGPreflightListenEventAccess() {
+            permissionGranted = true
+            setupTap()
+            return
         }
-        setupTap()
+
+        permissionGranted = false
+        if CGRequestListenEventAccess() {
+            permissionGranted = true
+            setupTap()
+        } else {
+            scheduleRetry()
+        }
     }
 
     private func setupTap() {
+        guard eventTap == nil else { return }
         let mask = CGEventMask(1 << CGEventType.keyDown.rawValue)
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
