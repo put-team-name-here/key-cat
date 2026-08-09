@@ -167,6 +167,15 @@ enum CatUnlockSource {
     case purchase
 }
 
+func catHarvestDropRates(for crop: CropKind) -> [(catID: String, probability: Double)] {
+    switch crop {
+    case .carrot:
+        return [("cheese", 0.001), ("oddeye", 0.000001)]
+    case .cabbage:
+        return [("gray", 0.001), ("calico", 0.000001)]
+    }
+}
+
 struct CatUnlockNotice: Identifiable {
     let id = UUID()
     let catID: String
@@ -633,17 +642,11 @@ final class AppState: ObservableObject {
         UserDefaults.standard.set(data, forKey: unlockedCatIDsKey)
     }
 
-    /// 당근은 치즈·오드아이, 양배추는 그레이만 각 드롭 확률에 따라 획득한다.
+    /// 작물별 드롭 확률에 따라 미보유 고양이를 획득한다.
     private func unlockHarvestCatsIfNeeded(for crop: CropKind) {
         var updatedIDs = unlockedCatIDs
         var newlyUnlockedIDs: [String] = []
-        let dropRates: [(catID: String, probability: Double)]
-        switch crop {
-        case .carrot:
-            dropRates = [("cheese", 0.001), ("oddeye", 0.000001)] // 치즈 0.1%, 오드아이 0.0001%
-        case .cabbage:
-            dropRates = [("gray", 0.001)] // 그레이 0.1%
-        }
+        let dropRates = catHarvestDropRates(for: crop)
         for drop in dropRates where !updatedIDs.contains(drop.catID) {
             if Double.random(in: 0..<1) < drop.probability {
                 updatedIDs.insert(drop.catID)

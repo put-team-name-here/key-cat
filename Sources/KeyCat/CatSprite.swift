@@ -31,6 +31,10 @@ func localizedCatName(_ id: String) -> String {
     case "sphynx": return L10n.text("스핑크스", "Sphynx")
     case "tuxedo": return L10n.text("턱시도", "Tuxedo")
     case "oddeye": return L10n.text("오드아이", "Odd-eyed")
+    case "persian": return L10n.text("페르시안", "Persian")
+    case "calico": return L10n.text("삼색냥", "Calico")
+    case "russian_blue": return L10n.text("러시안 블루", "Russian Blue")
+    case "british_shorthair": return L10n.text("브리티시 쇼트헤어", "British Shorthair")
     default: return id
     }
 }
@@ -39,12 +43,14 @@ func catPurchasePrice(_ id: String) -> Int {
     switch id {
     case "siamese": return 100_000
     case "sphynx": return 50_000
+    case "persian": return 500_000
+    case "russian_blue", "british_shorthair": return 250_000
     default: return 10_000
     }
 }
 
 enum CatCatalog {
-    /// Artwork/SourceAssets/cats의 6종을 Resources/cats로 정규화해 이식한 목록.
+    /// Resources/cats의 스프라이트를 영문 snake_case 키로 연결한 고양이 목록.
     static let all: [CatCharacter] = [
         .init(id: "cheese", name: "치즈", front: "cheese_front", leftSheet: "cheese_side", rightSheet: nil,
               wateringSheet: "cheese_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "cheese_harvest"),
@@ -58,6 +64,14 @@ enum CatCatalog {
               wateringSheet: "tuxedo_watering", wateringRows: 3, wateringFrameCount: 8, harvestSheet: "tuxedo_harvest"),
         .init(id: "oddeye", name: "오드아이", front: "oddeye_front", leftSheet: "oddeye_left", rightSheet: "oddeye_right",
               wateringSheet: "oddeye_watering", wateringRows: 3, wateringFrameCount: 8, harvestSheet: "oddeye_harvest"),
+        .init(id: "persian", name: "페르시안", front: "persian_front", leftSheet: "persian_side", rightSheet: nil,
+              wateringSheet: "persian_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "persian_idle"),
+        .init(id: "calico", name: "삼색냥", front: "calico_front", leftSheet: "calico_side", rightSheet: nil,
+              wateringSheet: "calico_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "calico_idle"),
+        .init(id: "russian_blue", name: "러시안 블루", front: "russian_blue_front", leftSheet: "russian_blue_side", rightSheet: nil,
+              wateringSheet: "russian_blue_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "russian_blue_idle"),
+        .init(id: "british_shorthair", name: "브리티시 쇼트헤어", front: "british_shorthair_front", leftSheet: "british_shorthair_side", rightSheet: nil,
+              wateringSheet: "british_shorthair_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "british_shorthair_idle"),
     ]
 }
 

@@ -57,15 +57,22 @@ private struct CodexCatEntry: Identifiable {
 private let codexCats: [CodexCatEntry] = [
     .init(id: "siamese", idleResource: "siamese_idle"),
     .init(id: "sphynx", idleResource: "sphynx_idle"),
+    .init(id: "persian", idleResource: "persian_idle"),
+    .init(id: "russian_blue", idleResource: "russian_blue_idle"),
+    .init(id: "british_shorthair", idleResource: "british_shorthair_idle"),
     .init(id: "cheese", idleResource: "cheese_idle"),
     .init(id: "tuxedo", idleResource: "tuxedo_idle"),
     .init(id: "oddeye", idleResource: "oddeye_idle"),
     .init(id: "gray", idleResource: "gray_idle"),
+    .init(id: "calico", idleResource: "calico_idle"),
 ]
 
 private let shopCats: [CodexCatEntry] = [
     .init(id: "siamese", idleResource: "siamese_idle"),
     .init(id: "sphynx", idleResource: "sphynx_idle"),
+    .init(id: "persian", idleResource: "persian_idle"),
+    .init(id: "russian_blue", idleResource: "russian_blue_idle"),
+    .init(id: "british_shorthair", idleResource: "british_shorthair_idle"),
 ]
 
 private enum OnboardingAsset {
@@ -600,7 +607,7 @@ struct OverlayView: View {
             catHouse
             WalkingCat(
                 character: state.selectedCat,
-                spriteSize: 64,
+                spriteSize: 70.4,
                 fps: 9,
                 speed: 34,
                 farmTask: state.farmWorkQueue.first,
@@ -1255,6 +1262,9 @@ struct OverlayView: View {
             }
             if cat.id == "gray" {
                 return L10n.text("양배추 수확 시 0.1% 확률로 획득", "0.1% chance from harvesting cabbages")
+            }
+            if cat.id == "calico" {
+                return L10n.text("양배추 수확 시 0.0001% 확률로 획득", "0.0001% chance from harvesting cabbages")
             }
             return L10n.text("상점에서 구매할 수 있어요", "Available from the shop")
         }()
