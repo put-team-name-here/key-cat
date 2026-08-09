@@ -134,11 +134,13 @@ struct Triangle: Shape {
 }
 
 /// 오버레이 창 내용. stt-spike RHODES 콘솔 테마 이식.
-/// 축소(작은 위젯) / 확장(농장 콘솔) 두 화면을 state.expanded 로 전환.
+/// 초미니(고양이) / 축소(상태 카드) / 확장(농장 콘솔) 화면을 전환한다.
 struct OverlayView: View {
     @ObservedObject var counter: KeyCounter
     @ObservedObject var state: AppState
     var onToggleSize: () -> Void
+    var onMinimize: () -> Void = {}
+    var onRestore: () -> Void = {}
     /// "설정" 버튼: 메뉴바 NSMenu 를 popUp (AppDelegate 배선)
     var onOpenSettings: () -> Void = {}
     /// 온보딩 종료 뒤 AppKit 패널 크기를 정상 화면에 맞게 다시 측정한다.
@@ -160,10 +162,12 @@ struct OverlayView: View {
         Group {
             if state.isOnboardingPresented {
                 onboardingView
-            } else if state.expanded {
-                expandedView
             } else {
-                collapsedView
+                switch state.overlaySizeMode {
+                case .compact: compactView
+                case .collapsed: collapsedView
+                case .expanded: expandedView
+                }
             }
         }
     }
@@ -327,6 +331,44 @@ struct OverlayView: View {
         onOnboardingFinished()
     }
 
+    // MARK: - 초미니 화면 (정사각형 잔디 + 고양이)
+
+    private var compactView: some View {
+        ZStack(alignment: .topTrailing) {
+            GrassBackground(tileSize: 44)
+            WalkingCat(character: state.selectedCat, spriteSize: 68, fps: 9, speed: 24)
+
+            Button(action: onRestore) {
+                guiControlIcon("zoom_in", size: 18)
+                    .frame(width: 29, height: 29)
+                    .background(rt.panel)
+                    .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 3))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.text("위젯 크게 보기", "Enlarge widget"))
+            .padding(5)
+        }
+        .frame(width: 116, height: 116)
+        .overlay(alignment: .bottomTrailing) {
+            Button(action: state.cycleCat) {
+                guiControlIcon("change", size: 21)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(rt.yellow))
+                    .overlay(Circle().strokeBorder(rt.ink, lineWidth: 3))
+                    .shadow(color: Color.black.opacity(0.25), radius: 0, x: 2, y: 2)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.text("고양이 변경", "Change cat"))
+            .padding(5)
+        }
+        .padding(8)
+        .frame(width: 132, height: 132)
+        .background(rt.cardBg)
+        .clipped()
+        .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 3))
+        .fixedSize()
+    }
+
     // MARK: - 축소 화면 (레트로 픽셀 카드, 시안 축소화면.dc.html)
 
     private var collapsedView: some View {
@@ -347,7 +389,7 @@ struct OverlayView: View {
         ZStack(alignment: .bottomTrailing) {
             ZStack {
                 GrassBackground()
-                WalkingCat(character: state.selectedCat, spriteSize: 46, fps: 9)
+                WalkingCat(character: state.selectedCat, spriteSize: 60, fps: 9)
             }
             .frame(width: 118, height: 118)
             .clipped()
@@ -367,13 +409,22 @@ struct OverlayView: View {
         .frame(width: 118, height: 118, alignment: .topLeading)
     }
 
-    // MARK: 우측 - 상단 버튼행 + 정보 타일 3종
+    // MARK: 우측 - 상단 버튼행 + 정보 타일
 
     private var statsColumn: some View {
         VStack(spacing: 7) {
-            // 확대 + 설정 버튼
             HStack(spacing: 6) {
                 Spacer(minLength: 0)
+
+                Button(action: onMinimize) {
+                    guiControlIcon("zoom_out", size: 17)
+                        .frame(width: 29, height: 27)
+                        .background(rt.panel)
+                        .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 3))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.text("작게 보기", "Make widget smaller"))
+
                 Button(action: onToggleSize) {
                     guiControlIcon("zoom_in", size: 17)
                         .frame(width: 29, height: 27)
@@ -381,6 +432,7 @@ struct OverlayView: View {
                         .overlay(Rectangle().strokeBorder(rt.ink, lineWidth: 3))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(L10n.text("농장 크게 보기", "Open full farm"))
 
                 Button(action: onOpenSettings) {
                     guiControlIcon("setting", size: 17)
@@ -392,7 +444,6 @@ struct OverlayView: View {
             }
             .fixedSize(horizontal: false, vertical: true)
 
-            // 기록한 글자 수
             infoTile {
                 keyboardGlyph
                 Spacer(minLength: 0)
@@ -400,19 +451,16 @@ struct OverlayView: View {
                     .font(galmuriFont(14)).foregroundColor(rt.text)
             }
 
-            // 보유 코인
             infoTile {
                 coinGlyph
                 Spacer(minLength: 0)
                 Text("\(state.coins)")
                     .font(galmuriFont(14)).foregroundColor(rt.text)
             }
-
         }
         .frame(maxWidth: .infinity)
     }
 
-    /// 정보 타일: panel 배경 + ink 3px 테두리 + 좌측 아이콘 행
     private func infoTile<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         HStack(spacing: 8, content: content)
             .frame(maxWidth: .infinity)

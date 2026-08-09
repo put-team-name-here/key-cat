@@ -20,7 +20,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var autoModeItem: NSMenuItem!
 
     private var hosting: NSHostingView<OverlayView>!
-    /// 축소/확장 카드 콘텐츠 크기. setupPanel/toggleSize 에서 hosting fittingSize 로 확정.
+    /// 초미니/축소/확장 카드 콘텐츠 크기. 실제 SwiftUI fittingSize 로 갱신한다.
+    private var compactSize = NSSize(width: 132, height: 132)
     private var collapsedSize = NSSize(width: 357, height: 205)
     private var expandedSize = NSSize(width: 366, height: 851)
 
@@ -139,6 +140,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             counter: counter,
             state: state,
             onToggleSize: { [weak self] in self?.toggleSize() },
+            onMinimize: { [weak self] in self?.minimizeOverlay() },
+            onRestore: { [weak self] in self?.restoreOverlay() },
             onOpenSettings: { [weak self] in self?.openSettings() },
             onOnboardingFinished: { [weak self] in self?.finishOnboarding() }
         )
@@ -179,7 +182,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - 액션
 
     @objc private func toggleSize() {
-        state.expanded.toggle()
+        state.toggleExpanded()
+
+        resizePanelToCurrentContent()
+    }
+
+    private func minimizeOverlay() {
+        state.minimizeOverlay()
+
+        resizePanelToCurrentContent()
+    }
+
+    private func restoreOverlay() {
+        state.restoreCollapsedOverlay()
 
         resizePanelToCurrentContent()
     }
@@ -196,9 +211,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hosting.layoutSubtreeIfNeeded()
         let measured = hosting.fittingSize
         if measured.width > 0, measured.height > 0 {
-            if state.expanded { expandedSize = measured } else { collapsedSize = measured }
+            switch state.overlaySizeMode {
+            case .compact: compactSize = measured
+            case .collapsed: collapsedSize = measured
+            case .expanded: expandedSize = measured
+            }
         }
-        let newSize = state.expanded ? expandedSize : collapsedSize
+        let newSize: NSSize
+        switch state.overlaySizeMode {
+        case .compact: newSize = compactSize
+        case .collapsed: newSize = collapsedSize
+        case .expanded: newSize = expandedSize
+        }
 
         // 우측 상단 모서리를 고정한 채 크기 변경
         var frame = panel.frame

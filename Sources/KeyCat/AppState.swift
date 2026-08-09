@@ -174,8 +174,14 @@ struct CatUnlockNotice: Identifiable {
 }
 
 /// 축소/확장 + 농장 자원 상태를 담는 가벼운 상태 객체
+enum OverlaySizeMode {
+    case compact
+    case collapsed
+    case expanded
+}
+
 final class AppState: ObservableObject {
-    @Published var expanded = false {
+    @Published private(set) var overlaySizeMode: OverlaySizeMode = .collapsed {
         didSet {
             if shouldProcessFarmWorkInBackground {
                 scheduleCollapsedFarmWorkIfNeeded()
@@ -184,6 +190,20 @@ final class AppState: ObservableObject {
                 collapsedFarmWorkItem = nil
             }
         }
+    }
+
+    var expanded: Bool { overlaySizeMode == .expanded }
+
+    func toggleExpanded() {
+        overlaySizeMode = expanded ? .collapsed : .expanded
+    }
+
+    func minimizeOverlay() {
+        overlaySizeMode = .compact
+    }
+
+    func restoreCollapsedOverlay() {
+        overlaySizeMode = .collapsed
     }
     /// 최초 실행 시 표시되는 온보딩 화면의 표시 여부.
     @Published private(set) var isOnboardingPresented: Bool
