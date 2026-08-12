@@ -62,6 +62,31 @@ final class BalanceTests: XCTestCase {
         }
     }
 
+    func testNavigationUsesAllProvidedAssets() {
+        XCTAssertEqual(MapLocation.home.navigationIconResource, "icon_home")
+        XCTAssertEqual(MapLocation.field.navigationIconResource, "icon_field")
+        XCTAssertEqual(NavigationDirection.left.normalResource, "btn_left_normal")
+        XCTAssertEqual(NavigationDirection.left.pressedResource, "btn_left_pressed")
+        XCTAssertEqual(NavigationDirection.right.normalResource, "btn_right_normal")
+        XCTAssertEqual(NavigationDirection.right.pressedResource, "btn_right_pressed")
+
+        for resourceName in [
+            "btn_left_normal", "btn_left_pressed",
+            "btn_right_normal", "btn_right_pressed",
+            "icon_home", "icon_field",
+            "indicator_active", "indicator_inactive"
+        ] {
+            XCTAssertNotNil(
+                AppResources.bundle.url(
+                    forResource: resourceName,
+                    withExtension: "png",
+                    subdirectory: "navigation"
+                ),
+                "Missing navigation resource: \(resourceName).png"
+            )
+        }
+    }
+
     func testFurnitureInventoryConsumesAndReturnsItems() {
         guard let furniture = FurnitureCatalog.all.first else {
             return XCTFail("Furniture catalog should not be empty")

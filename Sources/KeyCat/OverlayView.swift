@@ -162,6 +162,7 @@ struct OverlayView: View {
     @State private var selectedCatForPurchase: CodexCatEntry?
     @State private var selectedFurnitureForPurchase: FurnitureItem?
     @State private var selectedFurnitureForPlacement: FurnitureItem?
+    @State private var selectedPlacedFurnitureForReposition: PlacedFurniture?
     @State private var selectedCodexCat: CodexCatEntry?
     @State private var selectedTypingDate: Date?
     @State private var purchaseQuantity = 1
@@ -654,8 +655,9 @@ struct OverlayView: View {
             HomeRoomView(
                 home: state.home,
                 selectedFurniture: selectedFurnitureForPlacement,
+                selectedPlacedFurniture: selectedPlacedFurnitureForReposition,
                 onPlace: placeSelectedFurniture,
-                onPlacedFurnitureTap: returnPlacedFurniture
+                onPlacedFurnitureTap: selectPlacedFurnitureForReposition
             )
             mapNavigation
             fieldControls
@@ -663,7 +665,12 @@ struct OverlayView: View {
                 .frame(maxWidth: .infinity, alignment: .topTrailing)
 
             if let furniture = selectedFurnitureForPlacement {
-                furniturePlacementHint(furniture)
+                furniturePlacementHint(furniture, isRepositioning: false)
+                    .position(x: 180, y: 28)
+                    .zIndex(3)
+            } else if let placedFurniture = selectedPlacedFurnitureForReposition,
+                      let furniture = FurnitureCatalog.item(withID: placedFurniture.furnitureID) {
+                furniturePlacementHint(furniture, isRepositioning: true)
                     .position(x: 180, y: 28)
                     .zIndex(3)
             }
@@ -674,17 +681,17 @@ struct OverlayView: View {
 
     private var mapNavigation: some View {
         HStack {
-            mapDestinationButton(.field, direction: .left)
+            mapDestinationButton(.home, direction: .left)
                 .padding(.leading, 10)
             Spacer(minLength: 0)
-            mapDestinationButton(.home, direction: .right)
+            mapDestinationButton(.field, direction: .right)
                 .padding(.trailing, 10)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .overlay(alignment: .bottom) {
             HStack(spacing: 3) {
-                navigationIndicator(isActive: state.selectedMapLocation == .field)
                 navigationIndicator(isActive: state.selectedMapLocation == .home)
+                navigationIndicator(isActive: state.selectedMapLocation == .field)
             }
             .padding(.bottom, 8)
         }
@@ -734,16 +741,35 @@ struct OverlayView: View {
         .accessibilityHidden(true)
     }
 
-    private func furniturePlacementHint(_ furniture: FurnitureItem) -> some View {
+    private func furniturePlacementHint(
+        _ furniture: FurnitureItem,
+        isRepositioning: Bool
+    ) -> some View {
         HStack(spacing: 5) {
             FurnitureAssetImage(furniture: furniture, size: 25)
             Text(L10n.text(
-                "\(furniture.displayName) 놓을 칸을 선택하세요",
-                "Choose a tile for \(furniture.displayName)"
+                isRepositioning
+                    ? "\(furniture.displayName) 옮길 칸을 선택하세요"
+                    : "\(furniture.displayName) 놓을 칸을 선택하세요",
+                isRepositioning
+                    ? "Choose a new tile for \(furniture.displayName)"
+                    : "Choose a tile for \(furniture.displayName)"
             ))
                 .font(galmuriFont(9))
                 .foregroundColor(fp.border)
-            Button(action: { selectedFurnitureForPlacement = nil }) {
+            if isRepositioning {
+                Button(action: returnSelectedPlacedFurniture) {
+                    Text(L10n.text("창고", "Storage"))
+                        .font(galmuriFont(8))
+                        .foregroundColor(fp.border)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 3)
+                        .background(fp.cell)
+                        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 1.5))
+                }
+                .buttonStyle(.plain)
+            }
+            Button(action: cancelFurniturePlacement) {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundColor(fp.border)
@@ -758,14 +784,33 @@ struct OverlayView: View {
     }
 
     private func placeSelectedFurniture(at tile: FarmTileCoordinate) {
-        guard let furniture = selectedFurnitureForPlacement else { return }
-        if state.placeFurniture(furniture, at: tile) {
-            selectedFurnitureForPlacement = nil
+        if let furniture = selectedFurnitureForPlacement {
+            if state.placeFurniture(furniture, at: tile) {
+                selectedFurnitureForPlacement = nil
+            }
+        } else if let placedFurniture = selectedPlacedFurnitureForReposition,
+                  state.moveFurniture(placedFurniture, to: tile) {
+            selectedPlacedFurnitureForReposition = nil
         }
     }
 
-    private func returnPlacedFurniture(_ placedFurniture: PlacedFurniture) {
-        _ = state.returnFurnitureToStorage(placedFurniture)
+    private func selectPlacedFurnitureForReposition(_ placedFurniture: PlacedFurniture) {
+        guard FurnitureCatalog.item(withID: placedFurniture.furnitureID) != nil else { return }
+        selectedFurnitureForPlacement = nil
+        selectedPlacedFurnitureForReposition = placedFurniture
+        state.selectedMapLocation = .home
+    }
+
+    private func returnSelectedPlacedFurniture() {
+        guard let placedFurniture = selectedPlacedFurnitureForReposition else { return }
+        if state.returnFurnitureToStorage(placedFurniture) {
+            selectedPlacedFurnitureForReposition = nil
+        }
+    }
+
+    private func cancelFurniturePlacement() {
+        selectedFurnitureForPlacement = nil
+        selectedPlacedFurnitureForReposition = nil
     }
 
     /// 현재 수확 작업의 작물에 맞는 머리 위 보상 이미지.
@@ -1669,6 +1714,7 @@ struct OverlayView: View {
 
     private func selectFurnitureForPlacement(_ furniture: FurnitureItem) {
         guard state.furnitureCount(furniture) > 0 else { return }
+        selectedPlacedFurnitureForReposition = nil
         selectedFurnitureForPlacement = furniture
         state.selectedMapLocation = .home
     }

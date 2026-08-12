@@ -548,6 +548,31 @@ final class AppState: ObservableObject {
         return true
     }
 
+    /// 집에 놓인 가구를 빈 칸으로 옮긴다.
+    @discardableResult
+    func moveFurniture(_ placedFurniture: PlacedFurniture, to tile: FarmTileCoordinate) -> Bool {
+        guard home.isValid(row: tile.row, column: tile.column),
+              let index = home.placedFurniture.firstIndex(where: { $0.id == placedFurniture.id })
+        else { return false }
+
+        let current = home.placedFurniture[index]
+        guard current.row != tile.row || current.column != tile.column else { return true }
+        guard !home.isOccupied(row: tile.row, column: tile.column) else { return false }
+
+        var updatedHome = home
+        updatedHome.placedFurniture[index] = PlacedFurniture(
+            id: current.id,
+            furnitureID: current.furnitureID,
+            row: tile.row,
+            column: tile.column
+        )
+        guard persistHomeState(home: updatedHome, furnitureInventory: furnitureInventory) else {
+            return false
+        }
+        home = updatedHome
+        return true
+    }
+
     /// 집에 놓인 가구를 다시 창고로 돌려놓는다.
     @discardableResult
     func returnFurnitureToStorage(_ placedFurniture: PlacedFurniture) -> Bool {

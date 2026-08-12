@@ -333,62 +333,28 @@ struct NavigationAssetButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
+        let resource = configuration.isPressed
+            ? direction.pressedResource
+            : direction.normalResource
+
         return VStack(spacing: 0) {
-            PixelNavigationButton(direction: direction, isPressed: configuration.isPressed)
+            if let image = NavigationAssetCache.image(resource) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.none)
+                    .scaledToFit()
+                    .frame(width: 30, height: 30)
+            } else {
+                Image(systemName: direction == .left ? "chevron.left" : "chevron.right")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.primary)
+                    .frame(width: 30, height: 30)
+            }
             configuration.label
         }
-        .padding(2)
-        .frame(width: 38, height: 68)
+        .frame(width: 38, height: 62, alignment: .top)
+        .contentShape(Rectangle())
         .opacity(isEnabled ? 1 : 0.55)
-    }
-}
-
-/// 제공된 버튼 PNG가 캔버스 우측·하단에서 잘린 상태여도 전체 화살표가 보이도록
-/// 픽셀 셀로 안전한 버튼 아트를 그린다.
-private struct PixelNavigationButton: View {
-    let direction: NavigationDirection
-    let isPressed: Bool
-
-    var body: some View {
-        ZStack {
-            Rectangle()
-                .fill(isPressed ? Color(red: 0.83, green: 0.70, blue: 0.49) : Color(red: 0.96, green: 0.92, blue: 0.81))
-            Rectangle()
-                .strokeBorder(Color(red: 0.28, green: 0.19, blue: 0.12), lineWidth: 2)
-            PixelNavigationArrow(direction: direction)
-        }
-        .frame(width: 32, height: 32)
-    }
-}
-
-private struct PixelNavigationArrow: View {
-    let direction: NavigationDirection
-
-    private var cells: [(Int, Int)] {
-        switch direction {
-        case .left:
-            return [(4, 0), (3, 1), (2, 2), (1, 3), (2, 4), (3, 5), (4, 6)]
-        case .right:
-            return [(2, 0), (3, 1), (4, 2), (5, 3), (4, 4), (3, 5), (2, 6)]
-        }
-    }
-
-    var body: some View {
-        Canvas { context, size in
-            let cellSize: CGFloat = 3
-            let origin = (size.width - cellSize * 8) / 2
-            let brown = Color(red: 0.28, green: 0.19, blue: 0.12)
-            for (column, row) in cells {
-                let rect = CGRect(
-                    x: origin + CGFloat(column) * cellSize,
-                    y: origin + CGFloat(row) * cellSize,
-                    width: cellSize * 2,
-                    height: cellSize
-                )
-                context.fill(Path(rect), with: .color(brown))
-            }
-        }
-        .frame(width: 24, height: 24)
     }
 }
 
@@ -418,6 +384,7 @@ struct FurnitureAssetImage: View {
 struct HomeRoomView: View {
     let home: HomeData
     let selectedFurniture: FurnitureItem?
+    let selectedPlacedFurniture: PlacedFurniture?
     let onPlace: (FarmTileCoordinate) -> Void
     let onPlacedFurnitureTap: (PlacedFurniture) -> Void
 
@@ -429,7 +396,7 @@ struct HomeRoomView: View {
         ZStack(alignment: .topLeading) {
             woodFloor
 
-            if selectedFurniture != nil {
+            if selectedFurniture != nil || selectedPlacedFurniture != nil {
                 placementGrid
                     .zIndex(3)
             }
@@ -453,8 +420,8 @@ struct HomeRoomView: View {
                     .position(position(for: placed))
                     .zIndex(2 + Double(placed.row) / 100 + Double(placed.column) / 10_000)
                     .accessibilityLabel(L10n.text(
-                        "배치된 \(furniture.displayName). 눌러서 창고로 돌려놓기",
-                        "Placed \(furniture.displayName). Select to return it to storage"
+                        "배치된 \(furniture.displayName). 눌러서 재배치하기",
+                        "Placed \(furniture.displayName). Select to reposition it"
                     ))
                 }
             }
@@ -491,12 +458,20 @@ struct HomeRoomView: View {
             ForEach(0..<HomeData.rows, id: \.self) { row in
                 HStack(spacing: 0) {
                     ForEach(0..<HomeData.cols, id: \.self) { column in
-                        let occupied = home.isOccupied(row: row, column: column)
+                        let isSelectedTile = selectedPlacedFurniture?.row == row
+                            && selectedPlacedFurniture?.column == column
+                        let occupied = home.isOccupied(row: row, column: column) && !isSelectedTile
                         Button(action: {
                             onPlace(FarmTileCoordinate(row: row, column: column))
                         }) {
                             Rectangle()
-                                .fill(occupied ? Color.red.opacity(0.18) : Color.white.opacity(0.08))
+                                .fill(
+                                    isSelectedTile
+                                        ? Color.blue.opacity(0.24)
+                                        : occupied
+                                            ? Color.red.opacity(0.18)
+                                            : Color.white.opacity(0.08)
+                                )
                                 .overlay(
                                     Rectangle()
                                         .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
@@ -504,9 +479,14 @@ struct HomeRoomView: View {
                                 .frame(width: tileSize, height: tileSize)
                         }
                         .buttonStyle(.plain)
+                        .disabled(occupied)
                         .accessibilityLabel(L10n.text(
-                            "집 \(row + 1)행 \(column + 1)열에 가구 배치",
-                            "Place furniture in home row \(row + 1), column \(column + 1)"
+                            selectedPlacedFurniture == nil
+                                ? "집 \(row + 1)행 \(column + 1)열에 가구 배치"
+                                : "가구를 집 \(row + 1)행 \(column + 1)열로 이동",
+                            selectedPlacedFurniture == nil
+                                ? "Place furniture in home row \(row + 1), column \(column + 1)"
+                                : "Move furniture to home row \(row + 1), column \(column + 1)"
                         ))
                     }
                 }
