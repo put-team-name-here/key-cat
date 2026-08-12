@@ -703,7 +703,7 @@ struct OverlayView: View {
                     .frame(width: 22, height: 22)
             } else {
                 Image(systemName: location == .field ? "leaf.fill" : "house.fill")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundColor(fp.border)
                     .frame(width: 22, height: 22)
             }
@@ -727,7 +727,7 @@ struct OverlayView: View {
             } else {
                 Circle()
                     .fill(isActive ? fp.primary : fp.cell)
-                    .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
+                    .overlay(Circle().strokeBorder(fp.border, lineWidth: 1.5))
             }
         }
         .frame(width: 12, height: 12)

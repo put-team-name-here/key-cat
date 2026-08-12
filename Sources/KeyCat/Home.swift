@@ -333,27 +333,62 @@ struct NavigationAssetButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
-        let resource = configuration.isPressed
-            ? direction.pressedResource
-            : direction.normalResource
-
         return VStack(spacing: 0) {
-            if let image = NavigationAssetCache.image(resource) {
-                Image(nsImage: image)
-                    .resizable()
-                    .interpolation(.none)
-                    .scaledToFit()
-                    .frame(width: 32, height: 32)
-            } else {
-                Image(systemName: direction == .left ? "chevron.left" : "chevron.right")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.primary)
-                    .frame(width: 32, height: 32)
-            }
+            PixelNavigationButton(direction: direction, isPressed: configuration.isPressed)
             configuration.label
         }
         .padding(2)
+        .frame(width: 38, height: 68)
         .opacity(isEnabled ? 1 : 0.55)
+    }
+}
+
+/// 제공된 버튼 PNG가 캔버스 우측·하단에서 잘린 상태여도 전체 화살표가 보이도록
+/// 픽셀 셀로 안전한 버튼 아트를 그린다.
+private struct PixelNavigationButton: View {
+    let direction: NavigationDirection
+    let isPressed: Bool
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(isPressed ? Color(red: 0.83, green: 0.70, blue: 0.49) : Color(red: 0.96, green: 0.92, blue: 0.81))
+            Rectangle()
+                .strokeBorder(Color(red: 0.28, green: 0.19, blue: 0.12), lineWidth: 2)
+            PixelNavigationArrow(direction: direction)
+        }
+        .frame(width: 32, height: 32)
+    }
+}
+
+private struct PixelNavigationArrow: View {
+    let direction: NavigationDirection
+
+    private var cells: [(Int, Int)] {
+        switch direction {
+        case .left:
+            return [(4, 0), (3, 1), (2, 2), (1, 3), (2, 4), (3, 5), (4, 6)]
+        case .right:
+            return [(2, 0), (3, 1), (4, 2), (5, 3), (4, 4), (3, 5), (2, 6)]
+        }
+    }
+
+    var body: some View {
+        Canvas { context, size in
+            let cellSize: CGFloat = 3
+            let origin = (size.width - cellSize * 8) / 2
+            let brown = Color(red: 0.28, green: 0.19, blue: 0.12)
+            for (column, row) in cells {
+                let rect = CGRect(
+                    x: origin + CGFloat(column) * cellSize,
+                    y: origin + CGFloat(row) * cellSize,
+                    width: cellSize * 2,
+                    height: cellSize
+                )
+                context.fill(Path(rect), with: .color(brown))
+            }
+        }
+        .frame(width: 24, height: 24)
     }
 }
 
