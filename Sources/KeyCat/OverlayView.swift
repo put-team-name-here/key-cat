@@ -707,12 +707,12 @@ struct OverlayView: View {
                     .resizable()
                     .interpolation(.none)
                     .scaledToFit()
-                    .frame(width: 22, height: 22)
+                    .frame(width: 44, height: 44)
             } else {
                 Image(systemName: location == .field ? "leaf.fill" : "house.fill")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(fp.border)
-                    .frame(width: 22, height: 22)
+                    .frame(width: 44, height: 44)
             }
         }
         .buttonStyle(NavigationAssetButtonStyle(direction: direction))

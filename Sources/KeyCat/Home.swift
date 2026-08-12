@@ -343,16 +343,16 @@ struct NavigationAssetButtonStyle: ButtonStyle {
                     .resizable()
                     .interpolation(.none)
                     .scaledToFit()
-                    .frame(width: 30, height: 30)
+                    .frame(width: 60, height: 60)
             } else {
                 Image(systemName: direction == .left ? "chevron.left" : "chevron.right")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.primary)
-                    .frame(width: 30, height: 30)
+                    .frame(width: 60, height: 60)
             }
             configuration.label
         }
-        .frame(width: 38, height: 62, alignment: .top)
+        .frame(width: 64, height: 110, alignment: .top)
         .contentShape(Rectangle())
         .opacity(isEnabled ? 1 : 0.55)
     }
