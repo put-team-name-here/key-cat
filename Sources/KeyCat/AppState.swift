@@ -38,6 +38,7 @@ enum CodexCategory: String, CaseIterable, Identifiable {
 enum ShopCategory: String, CaseIterable, Identifiable {
     case seeds
     case cats
+    case furniture
 
     var id: String { rawValue }
 
@@ -45,6 +46,7 @@ enum ShopCategory: String, CaseIterable, Identifiable {
         switch self {
         case .seeds: return L10n.text("씨앗", "Seeds")
         case .cats: return L10n.text("고양이", "Cats")
+        case .furniture: return L10n.text("가구", "Furniture")
         }
     }
 }
@@ -228,8 +230,12 @@ final class AppState: ObservableObject {
 
     /// 확장 화면에서 선택한 하단 탭
     @Published var selectedFarmTab: FarmTab = .shop
+    /// 확장 화면 맵에서 현재 보고 있는 위치
+    @Published var selectedMapLocation: MapLocation = .field
     /// 상점 화면에서 선택한 상품 카테고리
     @Published var selectedShopCategory: ShopCategory = .seeds
+    /// 창고 화면에서 선택한 보관품 카테고리
+    @Published var selectedStorageCategory: StorageCategory = .seeds
     /// 도감 화면에서 선택한 내부 카테고리
     @Published var selectedCodexCategory: CodexCategory = .crops
 
@@ -249,6 +255,9 @@ final class AppState: ObservableObject {
         didSet { FarmFieldStorage.save(farmField) }
     }
 
+    /// 집에 배치한 가구. 집+가구 스냅샷에서 복원한다.
+    @Published private(set) var home: HomeData
+
     /// 상점에서 구매한 씨앗. 변경될 때마다 UserDefaults에 저장한다.
     @Published private(set) var seedInventory: SeedInventory {
         didSet { saveSeedInventory() }
@@ -257,6 +266,9 @@ final class AppState: ObservableObject {
     @Published private(set) var cropInventory: CropInventory {
         didSet { saveCropInventory() }
     }
+
+    /// 상점에서 구매한 가구. 집+가구 스냅샷에서 복원한다.
+    @Published private(set) var furnitureInventory: FurnitureInventory
 
     /// 발생 순서대로 고양이가 처리할 급수·수확 작업 큐.
     @Published private(set) var farmWorkQueue: [FarmWorkTask] = [] {
@@ -271,6 +283,7 @@ final class AppState: ObservableObject {
     private let autoModeKey = "autoModeEnabled"
     private let seedInventoryKey = "seedInventory"
     private let cropInventoryKey = "cropInventory"
+    private let furnitureInventoryKey = "furnitureInventory"
     private let unlockedCatIDsKey = "unlockedCatIDs"
     private let onboardingCompletedKey = "onboardingCompleted"
     private let lastAppActiveAtKey = "lastAppActiveAt"
@@ -314,6 +327,16 @@ final class AppState: ObservableObject {
         } else {
             cropInventory = CropInventory()
         }
+        let legacyFurnitureInventory: FurnitureInventory
+        if let data = UserDefaults.standard.data(forKey: furnitureInventoryKey),
+           let inventory = try? JSONDecoder().decode(FurnitureInventory.self, from: data) {
+            legacyFurnitureInventory = inventory
+        } else {
+            legacyFurnitureInventory = FurnitureInventory()
+        }
+        let homeState = HomeStorage.load(fallbackFurnitureInventory: legacyFurnitureInventory)
+        home = homeState.home
+        furnitureInventory = homeState.furnitureInventory
         var loadedField = FarmFieldStorage.load()
         let launchTime = Date()
         let lastAppActiveAt = UserDefaults.standard.object(forKey: lastAppActiveAtKey) as? Date
@@ -424,7 +447,8 @@ final class AppState: ObservableObject {
     @discardableResult
     func purchase(_ seed: SeedKind, quantity: Int = 1) -> Bool {
         guard quantity > 0 else { return false }
-        let totalPrice = seed.purchasePrice * quantity
+        let (totalPrice, overflow) = seed.purchasePrice.multipliedReportingOverflow(by: quantity)
+        guard !overflow else { return false }
         guard coins >= totalPrice else { return false }
         seedInventory.add(seed, quantity: quantity)
         coins -= totalPrice
@@ -462,6 +486,34 @@ final class AppState: ObservableObject {
         cropInventory.count(of: crop)
     }
 
+    func furnitureCount(_ furniture: FurnitureItem) -> Int {
+        furnitureInventory.count(of: furniture)
+    }
+
+    /// 상점에서 가구를 선택한 수량만큼 구매하고 총 가격을 코인에서 차감한다.
+    @discardableResult
+    func purchase(_ furniture: FurnitureItem, quantity: Int = 1) -> Bool {
+        guard quantity > 0,
+              let catalogFurniture = FurnitureCatalog.item(withID: furniture.id),
+              catalogFurniture.purchasePrice > 0
+        else { return false }
+
+        let (totalPrice, overflow) = catalogFurniture.purchasePrice
+            .multipliedReportingOverflow(by: quantity)
+        guard !overflow else { return false }
+        guard coins >= totalPrice else { return false }
+        var updatedInventory = furnitureInventory
+        guard updatedInventory.add(catalogFurniture, quantity: quantity) else {
+            return false
+        }
+        guard persistHomeState(home: home, furnitureInventory: updatedInventory) else {
+            return false
+        }
+        furnitureInventory = updatedInventory
+        coins -= totalPrice
+        return true
+    }
+
     /// 창고의 작물을 선택한 수량만큼 판매하고 판매 대금을 코인에 더한다.
     @discardableResult
     func sell(_ crop: CropKind, quantity: Int) -> Bool {
@@ -469,6 +521,49 @@ final class AppState: ObservableObject {
         guard updatedInventory.consume(crop, quantity: quantity) else { return false }
         cropInventory = updatedInventory
         coins += crop.salePrice * quantity
+        return true
+    }
+
+    /// 창고에서 선택한 가구를 집의 빈 칸에 하나 배치한다.
+    @discardableResult
+    func placeFurniture(_ furniture: FurnitureItem, at tile: FarmTileCoordinate) -> Bool {
+        guard home.isValid(row: tile.row, column: tile.column),
+              !home.isOccupied(row: tile.row, column: tile.column)
+        else { return false }
+
+        var updatedInventory = furnitureInventory
+        guard updatedInventory.consume(furniture) else { return false }
+
+        var updatedHome = home
+        updatedHome.placedFurniture.append(PlacedFurniture(
+            furnitureID: furniture.id,
+            row: tile.row,
+            column: tile.column
+        ))
+        guard persistHomeState(home: updatedHome, furnitureInventory: updatedInventory) else {
+            return false
+        }
+        furnitureInventory = updatedInventory
+        home = updatedHome
+        return true
+    }
+
+    /// 집에 놓인 가구를 다시 창고로 돌려놓는다.
+    @discardableResult
+    func returnFurnitureToStorage(_ placedFurniture: PlacedFurniture) -> Bool {
+        guard let furniture = FurnitureCatalog.item(withID: placedFurniture.furnitureID),
+              home.placedFurniture.contains(where: { $0.id == placedFurniture.id })
+        else { return false }
+
+        var updatedHome = home
+        updatedHome.placedFurniture.removeAll { $0.id == placedFurniture.id }
+        var updatedInventory = furnitureInventory
+        guard updatedInventory.add(furniture) else { return false }
+        guard persistHomeState(home: updatedHome, furnitureInventory: updatedInventory) else {
+            return false
+        }
+        home = updatedHome
+        furnitureInventory = updatedInventory
         return true
     }
 
@@ -635,6 +730,14 @@ final class AppState: ObservableObject {
     private func saveCropInventory() {
         guard let data = try? JSONEncoder().encode(cropInventory) else { return }
         UserDefaults.standard.set(data, forKey: cropInventoryKey)
+    }
+
+    @discardableResult
+    private func persistHomeState(home: HomeData, furnitureInventory: FurnitureInventory) -> Bool {
+        HomeStorage.save(HomeStateSnapshot(
+            home: home,
+            furnitureInventory: furnitureInventory
+        ))
     }
 
     private func saveUnlockedCats() {

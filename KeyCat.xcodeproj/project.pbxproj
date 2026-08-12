@@ -23,6 +23,10 @@
 		A10000000000000000000014 /* gui in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* gui */; };
 		A10000000000000000000015 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* Assets.xcassets */; };
 		A10000000000000000000016 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* Localization.swift */; };
+		A10000000000000000000017 /* Home.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* Home.swift */; };
+		A10000000000000000000018 /* furniture in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000024 /* furniture */; };
+		A10000000000000000000019 /* home in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000025 /* home */; };
+		A10000000000000000000020 /* navigation in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000026 /* navigation */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -46,6 +50,10 @@
 		A20000000000000000000021 /* KeyCat.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KeyCat.entitlements; sourceTree = "<group>"; };
 		A20000000000000000000022 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		A20000000000000000000023 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		A20000000000000000000024 /* furniture */ = {isa = PBXFileReference; lastKnownFileType = folder; path = furniture; sourceTree = "<group>"; };
+		A20000000000000000000025 /* home */ = {isa = PBXFileReference; lastKnownFileType = folder; path = home; sourceTree = "<group>"; };
+		A20000000000000000000026 /* navigation */ = {isa = PBXFileReference; lastKnownFileType = folder; path = navigation; sourceTree = "<group>"; };
+		A20000000000000000000017 /* Home.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Home.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,6 +89,7 @@
 				A20000000000000000000008 /* ResourceBundle.swift */,
 				A20000000000000000000009 /* Theme.swift */,
 				A20000000000000000000016 /* Localization.swift */,
+				A20000000000000000000017 /* Home.swift */,
 				A20000000000000000000015 /* Assets.xcassets */,
 				A40000000000000000000003 /* Resources */,
 			);
@@ -95,6 +104,9 @@
 				A20000000000000000000012 /* fonts */,
 				A20000000000000000000013 /* grounds */,
 				A20000000000000000000014 /* gui */,
+				A20000000000000000000024 /* furniture */,
+				A20000000000000000000025 /* home */,
+				A20000000000000000000026 /* navigation */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -181,6 +193,9 @@
 				A10000000000000000000012 /* fonts in Resources */,
 				A10000000000000000000013 /* grounds in Resources */,
 				A10000000000000000000014 /* gui in Resources */,
+				A10000000000000000000018 /* furniture in Resources */,
+				A10000000000000000000019 /* home in Resources */,
+				A10000000000000000000020 /* navigation in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -201,6 +216,7 @@
 				A10000000000000000000008 /* ResourceBundle.swift in Sources */,
 				A10000000000000000000009 /* Theme.swift in Sources */,
 				A10000000000000000000016 /* Localization.swift in Sources */,
+				A10000000000000000000017 /* Home.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

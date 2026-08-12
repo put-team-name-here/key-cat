@@ -43,4 +43,66 @@ final class BalanceTests: XCTestCase {
         XCTAssertEqual(L10n.text("당근", "Carrot", language: .korean), "당근")
         XCTAssertEqual(L10n.text("당근", "Carrot", language: .english), "Carrot")
     }
+
+    func testFurnitureCatalogMatchesProvidedAssets() {
+        XCTAssertEqual(FurnitureCatalog.all.count, 39)
+        XCTAssertEqual(FurnitureCatalog.all.filter { $0.group == .antique }.count, 19)
+        XCTAssertEqual(FurnitureCatalog.all.filter { $0.group == .farm }.count, 20)
+
+        for furniture in FurnitureCatalog.all {
+            XCTAssertNotNil(
+                AppResources.bundle.url(
+                    forResource: furniture.resourceName,
+                    withExtension: "png",
+                    subdirectory: "furniture"
+                ),
+                "Missing furniture resource: \(furniture.resourceName).png"
+            )
+            XCTAssertGreaterThan(furniture.purchasePrice, 0)
+        }
+    }
+
+    func testFurnitureInventoryConsumesAndReturnsItems() {
+        guard let furniture = FurnitureCatalog.all.first else {
+            return XCTFail("Furniture catalog should not be empty")
+        }
+
+        var inventory = FurnitureInventory()
+        XCTAssertEqual(inventory.count(of: furniture), 0)
+        inventory.add(furniture, quantity: 2)
+        XCTAssertEqual(inventory.count(of: furniture), 2)
+        XCTAssertTrue(inventory.consume(furniture))
+        XCTAssertEqual(inventory.count(of: furniture), 1)
+        XCTAssertFalse(inventory.consume(furniture, quantity: 2))
+        XCTAssertEqual(inventory.count(of: furniture), 1)
+    }
+
+    func testFurnitureInventoryPreventsIntegerOverflowAndRoundTrips() throws {
+        guard let furniture = FurnitureCatalog.all.first else {
+            return XCTFail("Furniture catalog should not be empty")
+        }
+
+        var inventory = FurnitureInventory()
+        XCTAssertTrue(inventory.add(furniture, quantity: Int.max))
+        XCTAssertFalse(inventory.add(furniture))
+
+        let snapshot = HomeStateSnapshot(home: HomeData(), furnitureInventory: inventory)
+        let encoded = try JSONEncoder().encode(snapshot)
+        let decoded = try JSONDecoder().decode(HomeStateSnapshot.self, from: encoded)
+        XCTAssertEqual(decoded.furnitureInventory.count(of: furniture), Int.max)
+    }
+
+    func testHomeDataRejectsInvalidAndOccupiedTiles() {
+        var home = HomeData()
+        XCTAssertTrue(home.isValid(row: 0, column: 0))
+        XCTAssertFalse(home.isValid(row: HomeData.rows, column: 0))
+        XCTAssertFalse(home.isOccupied(row: 0, column: 0))
+
+        home.placedFurniture.append(PlacedFurniture(
+            furnitureID: FurnitureCatalog.all[0].id,
+            row: 0,
+            column: 0
+        ))
+        XCTAssertTrue(home.isOccupied(row: 0, column: 0))
+    }
 }
