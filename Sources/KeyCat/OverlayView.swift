@@ -163,6 +163,9 @@ struct OverlayView: View {
     @State private var selectedFurnitureForPurchase: FurnitureItem?
     @State private var selectedFurnitureForPlacement: FurnitureItem?
     @State private var selectedPlacedFurnitureForReposition: PlacedFurniture?
+    @State private var isHomePlacementModeEnabled = false
+    @State private var hoveredHomeTile: FarmTileCoordinate?
+    @State private var homePlacementPointer: CGPoint?
     @State private var selectedCodexCat: CodexCatEntry?
     @State private var selectedTypingDate: Date?
     @State private var purchaseQuantity = 1
@@ -656,62 +659,136 @@ struct OverlayView: View {
                 home: state.home,
                 selectedFurniture: selectedFurnitureForPlacement,
                 selectedPlacedFurniture: selectedPlacedFurnitureForReposition,
-                onPlace: placeSelectedFurniture
+                hoveredTile: hoveredHomeTile,
+                pointerLocation: homePlacementPointer
             )
-            mapNavigation
+            .zIndex(0)
 
-            if selectedFurnitureForPlacement == nil,
+            if !isHomePlacementModeEnabled,
+               activeFurniturePlacement == nil {
+                homePlacementLockedSurface
+                    .zIndex(4)
+            }
+
+            if isHomePlacementModeEnabled,
+               selectedFurnitureForPlacement == nil,
                selectedPlacedFurnitureForReposition == nil {
                 homeFurnitureInteractionLayer
+                    .zIndex(5)
             }
+
+            if activeFurniturePlacement != nil {
+                homePlacementSurface
+                    .zIndex(6)
+            }
+
+            mapNavigation
+                .zIndex(10)
+
+            homePlacementModeButton
+                .zIndex(11)
 
             fieldControls
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .topTrailing)
+                .zIndex(20)
 
             if let furniture = selectedFurnitureForPlacement {
                 furniturePlacementHint(furniture, isRepositioning: false)
                     .position(x: 180, y: 28)
-                    .zIndex(3)
+                    .zIndex(21)
             } else if let placedFurniture = selectedPlacedFurnitureForReposition,
                       let furniture = FurnitureCatalog.item(withID: placedFurniture.furnitureID) {
                 furniturePlacementHint(furniture, isRepositioning: true)
                     .position(x: 180, y: 28)
-                    .zIndex(3)
+                    .zIndex(21)
             }
         }
         .frame(height: 540)
         .clipped()
     }
 
-    /// 전체 화면 내비게이션 레이어보다 앞에서 가구의 실제 표시 영역을 클릭 대상으로 쓴다.
-    /// 편집 중에는 이 레이어를 숨겨 아래의 배치 그리드가 이동 클릭을 받도록 한다.
+    /// 배치 모드에서만 가구의 실제 표시 영역을 선택 대상으로 사용한다.
     private var homeFurnitureInteractionLayer: some View {
-        ForEach(state.home.placedFurniture) { placedFurniture in
-            if let furniture = FurnitureCatalog.item(withID: placedFurniture.furnitureID) {
-                Button(action: {
-                    selectPlacedFurnitureForReposition(placedFurniture)
-                }) {
-                    Rectangle()
-                        .fill(Color.black.opacity(0.001))
-                        .frame(width: furniture.renderSize, height: furniture.renderSize)
-                }
-                .buttonStyle(.plain)
-                .contentShape(Rectangle())
-                .position(
-                    x: (CGFloat(placedFurniture.column) + 0.5) * HomeRoomView.tileSize,
-                    y: (CGFloat(placedFurniture.row) + 0.5) * HomeRoomView.tileSize
+        HomePointerTrackingView(
+            onPointerMove: updateHomePlacementPointer,
+            onPointerExit: clearHomePlacementPointer,
+            onTap: { point in
+                updateHomePlacementPointer(point)
+                guard let placedFurniture = HomeRoomView.placedFurniture(
+                    in: state.home,
+                    at: point
                 )
-                .zIndex(
-                    2 + Double(placedFurniture.row) / 100
-                        + Double(placedFurniture.column) / 10_000
-                )
-                .accessibilityLabel(L10n.text(
-                    "배치된 \(furniture.displayName). 눌러서 재배치하기",
-                    "Placed \(furniture.displayName). Select to reposition it"
-                ))
+                else { return }
+                selectPlacedFurnitureForReposition(placedFurniture)
             }
+        )
+        .accessibilityLabel(L10n.text(
+            "가구를 선택해 재배치",
+            "Select furniture to reposition"
+        ))
+    }
+
+    private var homePlacementModeButton: some View {
+        Button(action: toggleHomePlacementMode) {
+            HStack(spacing: 4) {
+                Image(systemName: isHomePlacementModeEnabled ? "checkmark" : "square.and.pencil")
+                    .font(.system(size: 9, weight: .bold))
+                Text(L10n.text(
+                    isHomePlacementModeEnabled ? "완료" : "배치 모드",
+                    isHomePlacementModeEnabled ? "Done" : "Placement"
+                ))
+                    .font(galmuriFont(8))
+            }
+            .foregroundColor(fp.border)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 6)
+            .background(isHomePlacementModeEnabled ? fp.primary : fp.panel)
+            .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 2))
         }
+        .buttonStyle(.plain)
+        .position(x: 48, y: 510)
+        .accessibilityLabel(L10n.text(
+            isHomePlacementModeEnabled ? "가구 배치 모드 완료" : "가구 배치 모드 시작",
+            isHomePlacementModeEnabled ? "Finish furniture placement mode" : "Start furniture placement mode"
+        ))
+    }
+
+    /// 일반 집 화면에서는 바닥을 클릭해도 가구 편집으로 이어지지 않게 막는다.
+    /// 내비게이션과 배치 모드 버튼은 더 높은 레이어에서 계속 동작한다.
+    private var homePlacementLockedSurface: some View {
+        HomePointerTrackingView(
+            onPointerMove: { _ in },
+            onPointerExit: {},
+            onTap: { _ in }
+        )
+        .accessibilityHidden(true)
+    }
+
+    /// 칸 전체 격자 대신 포인터가 머무는 바닥과 흰색 가구 실루엣만 보여 주는 배치 입력면.
+    private var homePlacementSurface: some View {
+        HomePointerTrackingView(
+            onPointerMove: updateHomePlacementPointer,
+            onPointerExit: clearHomePlacementPointer,
+            onTap: { point in
+                updateHomePlacementPointer(point)
+                guard let tile = HomeRoomView.tile(at: point) else { return }
+                placeSelectedFurniture(at: tile)
+            }
+        )
+        .onDisappear(perform: clearHomePlacementPointer)
+        .accessibilityLabel(L10n.text(
+            "가구 배치 위치",
+            "Furniture placement position"
+        ))
+    }
+
+    private var activeFurniturePlacement: FurnitureItem? {
+        if let selectedFurnitureForPlacement {
+            return selectedFurnitureForPlacement
+        }
+        guard let placedFurniture = selectedPlacedFurnitureForReposition else { return nil }
+        return FurnitureCatalog.item(withID: placedFurniture.furnitureID)
     }
 
     private var mapNavigation: some View {
@@ -734,7 +811,7 @@ struct OverlayView: View {
         _ location: MapLocation,
         direction: NavigationDirection
     ) -> some View {
-        Button(action: { state.selectedMapLocation = location }) {
+        Button(action: { navigate(to: location) }) {
             if let image = NavigationAssetCache.image(location.navigationIconResource) {
                 Image(nsImage: image)
                     .resizable()
@@ -784,11 +861,11 @@ struct OverlayView: View {
             FurnitureAssetImage(furniture: furniture, size: 25)
             Text(L10n.text(
                 isRepositioning
-                    ? "\(furniture.displayName) 옮길 칸을 선택하세요"
-                    : "\(furniture.displayName) 놓을 칸을 선택하세요",
+                    ? "마우스로 \(furniture.displayName) 위치를 정하세요"
+                    : "마우스로 \(furniture.displayName) 놓을 위치를 정하세요",
                 isRepositioning
-                    ? "Choose a new tile for \(furniture.displayName)"
-                    : "Choose a tile for \(furniture.displayName)"
+                    ? "Move the mouse to position \(furniture.displayName)"
+                    : "Move the mouse to place \(furniture.displayName)"
             ))
                 .font(galmuriFont(9))
                 .foregroundColor(fp.border)
@@ -822,15 +899,19 @@ struct OverlayView: View {
         if let furniture = selectedFurnitureForPlacement {
             if state.placeFurniture(furniture, at: tile) {
                 selectedFurnitureForPlacement = nil
+                clearHomePlacementPointer()
             }
         } else if let placedFurniture = selectedPlacedFurnitureForReposition,
                   state.moveFurniture(placedFurniture, to: tile) {
             selectedPlacedFurnitureForReposition = nil
+            clearHomePlacementPointer()
         }
     }
 
     private func selectPlacedFurnitureForReposition(_ placedFurniture: PlacedFurniture) {
-        guard FurnitureCatalog.item(withID: placedFurniture.furnitureID) != nil else { return }
+        guard isHomePlacementModeEnabled,
+              FurnitureCatalog.item(withID: placedFurniture.furnitureID) != nil
+        else { return }
         selectedFurnitureForPlacement = nil
         selectedPlacedFurnitureForReposition = placedFurniture
         state.selectedMapLocation = .home
@@ -840,12 +921,41 @@ struct OverlayView: View {
         guard let placedFurniture = selectedPlacedFurnitureForReposition else { return }
         if state.returnFurnitureToStorage(placedFurniture) {
             selectedPlacedFurnitureForReposition = nil
+            clearHomePlacementPointer()
         }
     }
 
     private func cancelFurniturePlacement() {
         selectedFurnitureForPlacement = nil
         selectedPlacedFurnitureForReposition = nil
+        clearHomePlacementPointer()
+    }
+
+    private func toggleHomePlacementMode() {
+        if isHomePlacementModeEnabled {
+            cancelFurniturePlacement()
+            isHomePlacementModeEnabled = false
+        } else {
+            isHomePlacementModeEnabled = true
+        }
+    }
+
+    private func clearHomePlacementPointer() {
+        hoveredHomeTile = nil
+        homePlacementPointer = nil
+    }
+
+    private func updateHomePlacementPointer(_ point: CGPoint) {
+        homePlacementPointer = point
+        hoveredHomeTile = HomeRoomView.tile(at: point)
+    }
+
+    private func navigate(to location: MapLocation) {
+        if location != .home {
+            cancelFurniturePlacement()
+            isHomePlacementModeEnabled = false
+        }
+        state.selectedMapLocation = location
     }
 
     /// 현재 수확 작업의 작물에 맞는 머리 위 보상 이미지.
@@ -1751,6 +1861,8 @@ struct OverlayView: View {
         guard state.furnitureCount(furniture) > 0 else { return }
         selectedPlacedFurnitureForReposition = nil
         selectedFurnitureForPlacement = furniture
+        isHomePlacementModeEnabled = true
+        clearHomePlacementPointer()
         state.selectedMapLocation = .home
     }
 

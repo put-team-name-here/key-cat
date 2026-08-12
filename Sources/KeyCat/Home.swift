@@ -361,22 +361,112 @@ struct NavigationAssetButtonStyle: ButtonStyle {
 struct FurnitureAssetImage: View {
     let furniture: FurnitureItem
     let size: CGFloat
+    var isSilhouette = false
 
     var body: some View {
         if let image = FurnitureAssetCache.image(furniture) {
-            Image(nsImage: image)
-                .resizable()
-                .interpolation(.none)
-                .scaledToFit()
-                .frame(width: size, height: size)
+            if isSilhouette {
+                Image(nsImage: image)
+                    .resizable()
+                    .renderingMode(.template)
+                    .interpolation(.none)
+                    .scaledToFit()
+                    .foregroundStyle(Color.white.opacity(0.82))
+                    .frame(width: size, height: size)
+            } else {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.none)
+                    .scaledToFit()
+                    .frame(width: size, height: size)
+            }
         } else {
             ZStack {
-                Rectangle().fill(Color.black.opacity(0.12))
+                Rectangle().fill(isSilhouette ? Color.white.opacity(0.82) : Color.black.opacity(0.12))
                 Image(systemName: "chair.lounge")
                     .font(.system(size: size * 0.32))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(isSilhouette ? .white : .secondary)
             }
             .frame(width: size, height: size)
+        }
+    }
+}
+
+/// 집 배치면의 마우스 이동과 클릭을 SwiftUI 좌표(좌상단 원점)로 전달한다.
+/// 투명한 SwiftUI 제스처 대신 AppKit 이벤트를 직접 받아 픽셀 가구 위에서도
+/// 포인터 추적과 배치 클릭이 일관되게 동작하도록 한다.
+struct HomePointerTrackingView: NSViewRepresentable {
+    let onPointerMove: (CGPoint) -> Void
+    let onPointerExit: () -> Void
+    let onTap: (CGPoint) -> Void
+
+    func makeNSView(context: Context) -> TrackingView {
+        let view = TrackingView()
+        configure(view)
+        return view
+    }
+
+    func updateNSView(_ nsView: TrackingView, context: Context) {
+        configure(nsView)
+    }
+
+    private func configure(_ view: TrackingView) {
+        view.onPointerMove = onPointerMove
+        view.onPointerExit = onPointerExit
+        view.onTap = onTap
+    }
+
+    final class TrackingView: NSView {
+        var onPointerMove: (CGPoint) -> Void = { _ in }
+        var onPointerExit: () -> Void = {}
+        var onTap: (CGPoint) -> Void = { _ in }
+        private var trackingArea: NSTrackingArea?
+
+        override var isOpaque: Bool { false }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            if let trackingArea {
+                removeTrackingArea(trackingArea)
+            }
+
+            let trackingArea = NSTrackingArea(
+                rect: .zero,
+                options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited, .mouseMoved],
+                owner: self,
+                userInfo: nil
+            )
+            addTrackingArea(trackingArea)
+            self.trackingArea = trackingArea
+        }
+
+        override func mouseMoved(with event: NSEvent) {
+            onPointerMove(swiftUIPoint(for: event))
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            onPointerMove(swiftUIPoint(for: event))
+        }
+
+        override func mouseExited(with event: NSEvent) {
+            onPointerExit()
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            onPointerMove(swiftUIPoint(for: event))
+        }
+
+        override func mouseUp(with event: NSEvent) {
+            onTap(swiftUIPoint(for: event))
+        }
+
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+            true
+        }
+
+        private func swiftUIPoint(for event: NSEvent) -> CGPoint {
+            let point = convert(event.locationInWindow, from: nil)
+            return CGPoint(x: point.x, y: bounds.height - point.y)
         }
     }
 }
@@ -387,7 +477,8 @@ struct HomeRoomView: View {
     let home: HomeData
     let selectedFurniture: FurnitureItem?
     let selectedPlacedFurniture: PlacedFurniture?
-    let onPlace: (FarmTileCoordinate) -> Void
+    let hoveredTile: FarmTileCoordinate?
+    let pointerLocation: CGPoint?
 
     private let tileSize: CGFloat = Self.tileSize
     private let roomWidth: CGFloat = CGFloat(HomeData.cols) * 45
@@ -397,13 +488,14 @@ struct HomeRoomView: View {
         ZStack(alignment: .topLeading) {
             woodFloor
 
-            if selectedFurniture != nil || selectedPlacedFurniture != nil {
-                placementGrid
+            if let hoveredTile, previewFurniture != nil {
+                hoveredTileHighlight(for: hoveredTile)
                     .zIndex(3)
             }
 
             ForEach(home.placedFurniture) { placed in
-                if let furniture = FurnitureCatalog.item(withID: placed.furnitureID) {
+                if placed.id != selectedPlacedFurniture?.id,
+                   let furniture = FurnitureCatalog.item(withID: placed.furnitureID) {
                     FurnitureAssetImage(
                         furniture: furniture,
                         size: furniture.renderSize
@@ -413,6 +505,19 @@ struct HomeRoomView: View {
                     .zIndex(2 + Double(placed.row) / 100 + Double(placed.column) / 10_000)
                     .accessibilityHidden(true)
                 }
+            }
+
+            if let furniture = previewFurniture,
+               let pointerLocation {
+                FurnitureAssetImage(
+                    furniture: furniture,
+                    size: furniture.renderSize,
+                    isSilhouette: true
+                )
+                .position(pointerLocation)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .zIndex(4)
             }
         }
         .frame(width: roomWidth, height: roomHeight)
@@ -442,51 +547,55 @@ struct HomeRoomView: View {
         }
     }
 
-    private var placementGrid: some View {
-        VStack(spacing: 0) {
-            ForEach(0..<HomeData.rows, id: \.self) { row in
-                HStack(spacing: 0) {
-                    ForEach(0..<HomeData.cols, id: \.self) { column in
-                        let isSelectedTile = selectedPlacedFurniture?.row == row
-                            && selectedPlacedFurniture?.column == column
-                        let occupied = home.isOccupied(row: row, column: column) && !isSelectedTile
-                        Button(action: {
-                            onPlace(FarmTileCoordinate(row: row, column: column))
-                        }) {
-                            Rectangle()
-                                .fill(
-                                    isSelectedTile
-                                        ? Color.blue.opacity(0.24)
-                                        : occupied
-                                            ? Color.red.opacity(0.18)
-                                            : Color.white.opacity(0.08)
-                                )
-                                .overlay(
-                                    Rectangle()
-                                        .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
-                                )
-                                .frame(width: tileSize, height: tileSize)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(occupied)
-                        .accessibilityLabel(L10n.text(
-                            selectedPlacedFurniture == nil
-                                ? "집 \(row + 1)행 \(column + 1)열에 가구 배치"
-                                : "가구를 집 \(row + 1)행 \(column + 1)열로 이동",
-                            selectedPlacedFurniture == nil
-                                ? "Place furniture in home row \(row + 1), column \(column + 1)"
-                                : "Move furniture to home row \(row + 1), column \(column + 1)"
-                        ))
-                    }
-                }
-            }
+    private var previewFurniture: FurnitureItem? {
+        if let selectedFurniture {
+            return selectedFurniture
         }
+        guard let selectedPlacedFurniture else { return nil }
+        return FurnitureCatalog.item(withID: selectedPlacedFurniture.furnitureID)
+    }
+
+    private func hoveredTileHighlight(for tile: FarmTileCoordinate) -> some View {
+        let isSelectedFurnitureTile = selectedPlacedFurniture?.row == tile.row
+            && selectedPlacedFurniture?.column == tile.column
+        let isOccupied = home.isOccupied(row: tile.row, column: tile.column)
+            && !isSelectedFurnitureTile
+
+        return Rectangle()
+            .fill(isOccupied ? Color.red.opacity(0.22) : Color.white.opacity(0.22))
+            .overlay(
+                Rectangle().strokeBorder(
+                    isOccupied ? Color.red.opacity(0.85) : Color.white.opacity(0.9),
+                    lineWidth: 2
+                )
+            )
+            .frame(width: tileSize, height: tileSize)
+            .position(Self.center(for: tile))
+            .allowsHitTesting(false)
     }
 
     private func position(for placed: PlacedFurniture) -> CGPoint {
+        Self.center(for: FarmTileCoordinate(row: placed.row, column: placed.column))
+    }
+
+    static func center(for tile: FarmTileCoordinate) -> CGPoint {
         CGPoint(
-            x: (CGFloat(placed.column) + 0.5) * tileSize,
-            y: (CGFloat(placed.row) + 0.5) * tileSize
+            x: (CGFloat(tile.column) + 0.5) * tileSize,
+            y: (CGFloat(tile.row) + 0.5) * tileSize
+        )
+    }
+
+    /// 화면 안의 포인터 좌표를 집 바닥의 배치 칸으로 바꾼다.
+    static func tile(at point: CGPoint) -> FarmTileCoordinate? {
+        let roomWidth = CGFloat(HomeData.cols) * tileSize
+        let roomHeight = CGFloat(HomeData.rows) * tileSize
+        guard point.x >= 0, point.x < roomWidth,
+              point.y >= 0, point.y < roomHeight
+        else { return nil }
+
+        return FarmTileCoordinate(
+            row: Int(point.y / tileSize),
+            column: Int(point.x / tileSize)
         )
     }
 

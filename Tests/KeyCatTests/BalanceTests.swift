@@ -153,4 +153,16 @@ final class BalanceTests: XCTestCase {
             at: CGPoint(x: center.x + furniture.renderSize, y: center.y)
         ))
     }
+
+    func testHomePointerLocationResolvesToOnlyOneFloorTile() {
+        XCTAssertEqual(
+            HomeRoomView.tile(at: CGPoint(x: 134, y: 224)),
+            FarmTileCoordinate(row: 4, column: 2)
+        )
+        XCTAssertNil(HomeRoomView.tile(at: CGPoint(x: -1, y: 20)))
+        XCTAssertNil(HomeRoomView.tile(at: CGPoint(
+            x: CGFloat(HomeData.cols) * HomeRoomView.tileSize,
+            y: 20
+        )))
+    }
 }
