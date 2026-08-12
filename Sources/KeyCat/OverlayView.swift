@@ -722,8 +722,8 @@ struct OverlayView: View {
                 .position(x: geometry.size.width - 29, y: geometry.size.height / 2)
 
             HStack(spacing: 3) {
-                navigationIndicator(isActive: state.selectedMapLocation == .home)
-                navigationIndicator(isActive: state.selectedMapLocation == .field)
+                navigationIndicator(isCurrent: state.selectedMapLocation == .home)
+                navigationIndicator(isCurrent: state.selectedMapLocation == .field)
             }
             .position(x: geometry.size.width / 2, y: geometry.size.height - 14)
             .allowsHitTesting(false)
@@ -756,8 +756,10 @@ struct OverlayView: View {
         ))
     }
 
-    private func navigationIndicator(isActive: Bool) -> some View {
-        let resource = isActive ? "indicator_active" : "indicator_inactive"
+    private func navigationIndicator(isCurrent: Bool) -> some View {
+        // 제공된 스프라이트는 이름과 달리 밝은 점이 indicator_inactive다.
+        // 현재 위치를 흰색으로 보여 주기 위해 밝은 점을 현재 페이지에 쓴다.
+        let resource = isCurrent ? "indicator_inactive" : "indicator_active"
         return Group {
             if let image = NavigationAssetCache.image(resource) {
                 Image(nsImage: image)
@@ -766,7 +768,7 @@ struct OverlayView: View {
                     .scaledToFit()
             } else {
                 Circle()
-                    .fill(isActive ? fp.primary : fp.cell)
+                    .fill(isCurrent ? fp.cell : fp.primary)
                     .overlay(Circle().strokeBorder(fp.border, lineWidth: 1.5))
             }
         }
