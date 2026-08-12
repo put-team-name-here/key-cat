@@ -729,29 +729,65 @@ struct OverlayView: View {
         ))
     }
 
-    private var homePlacementModeButton: some View {
-        Button(action: toggleHomePlacementMode) {
-            HStack(spacing: 4) {
-                Image(systemName: isHomePlacementModeEnabled ? "checkmark" : "square.and.pencil")
-                    .font(.system(size: 9, weight: .bold))
-                Text(L10n.text(
-                    isHomePlacementModeEnabled ? "완료" : "배치 모드",
-                    isHomePlacementModeEnabled ? "Done" : "Placement"
-                ))
-                    .font(galmuriFont(8))
+    @ViewBuilder private var homePlacementModeButton: some View {
+        if isHomePlacementModeEnabled {
+            HStack(spacing: 6) {
+                homePlacementControl(
+                    title: L10n.text("완료", "Done"),
+                    systemImage: "checkmark",
+                    background: fp.primary,
+                    action: toggleHomePlacementMode,
+                    accessibilityLabel: L10n.text("가구 배치 모드 완료", "Finish furniture placement mode")
+                )
+
+                if selectedPlacedFurnitureForReposition != nil {
+                    homePlacementControl(
+                        title: L10n.text("창고", "Storage"),
+                        systemImage: "archivebox",
+                        background: fp.cell,
+                        action: returnSelectedPlacedFurniture,
+                        accessibilityLabel: L10n.text("선택한 가구를 창고로 이동", "Move selected furniture to storage")
+                    )
+                }
+            }
+            .position(
+                x: selectedPlacedFurnitureForReposition == nil ? 60 : 112,
+                y: 503
+            )
+        } else {
+            homePlacementControl(
+                title: L10n.text("배치 모드", "Placement"),
+                systemImage: "square.and.pencil",
+                background: fp.panel,
+                action: toggleHomePlacementMode,
+                accessibilityLabel: L10n.text("가구 배치 모드 시작", "Start furniture placement mode")
+            )
+            .position(x: 60, y: 503)
+        }
+    }
+
+    /// 배치 중인 주요 조작은 함께 보이며, 기존 완료 버튼보다 1.5배 높은 33pt를 유지한다.
+    private func homePlacementControl(
+        title: String,
+        systemImage: String,
+        background: Color,
+        action: @escaping () -> Void,
+        accessibilityLabel: String
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 10, weight: .bold))
+                Text(title)
+                    .font(galmuriFont(10))
             }
             .foregroundColor(fp.border)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 6)
-            .background(isHomePlacementModeEnabled ? fp.primary : fp.panel)
+            .frame(width: 92, height: 33)
+            .background(background)
             .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 2))
         }
         .buttonStyle(.plain)
-        .position(x: 48, y: 510)
-        .accessibilityLabel(L10n.text(
-            isHomePlacementModeEnabled ? "가구 배치 모드 완료" : "가구 배치 모드 시작",
-            isHomePlacementModeEnabled ? "Finish furniture placement mode" : "Start furniture placement mode"
-        ))
+        .accessibilityLabel(accessibilityLabel)
     }
 
     /// 일반 집 화면에서는 바닥을 클릭해도 가구 편집으로 이어지지 않게 막는다.
@@ -869,18 +905,6 @@ struct OverlayView: View {
             ))
                 .font(galmuriFont(9))
                 .foregroundColor(fp.border)
-            if isRepositioning {
-                Button(action: returnSelectedPlacedFurniture) {
-                    Text(L10n.text("창고", "Storage"))
-                        .font(galmuriFont(8))
-                        .foregroundColor(fp.border)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 3)
-                        .background(fp.cell)
-                        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 1.5))
-                }
-                .buttonStyle(.plain)
-            }
             Button(action: cancelFurniturePlacement) {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .bold))
