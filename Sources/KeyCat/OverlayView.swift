@@ -675,10 +675,10 @@ struct OverlayView: View {
     private var mapNavigation: some View {
         HStack {
             mapDestinationButton(.field, direction: .left)
-                .padding(.leading, 5)
+                .padding(.leading, 10)
             Spacer(minLength: 0)
             mapDestinationButton(.home, direction: .right)
-                .padding(.trailing, 5)
+                .padding(.trailing, 10)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .overlay(alignment: .bottom) {
@@ -700,12 +700,12 @@ struct OverlayView: View {
                     .resizable()
                     .interpolation(.none)
                     .scaledToFit()
-                    .frame(width: 30, height: 30)
+                    .frame(width: 22, height: 22)
             } else {
                 Image(systemName: location == .field ? "leaf.fill" : "house.fill")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(fp.border)
-                    .frame(width: 30, height: 30)
+                    .frame(width: 22, height: 22)
             }
         }
         .buttonStyle(NavigationAssetButtonStyle(direction: direction))
@@ -730,7 +730,7 @@ struct OverlayView: View {
                     .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
             }
         }
-        .frame(width: 16, height: 16)
+        .frame(width: 12, height: 12)
         .accessibilityHidden(true)
     }
 
