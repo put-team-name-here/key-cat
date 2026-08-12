@@ -656,10 +656,15 @@ struct OverlayView: View {
                 home: state.home,
                 selectedFurniture: selectedFurnitureForPlacement,
                 selectedPlacedFurniture: selectedPlacedFurnitureForReposition,
-                onPlace: placeSelectedFurniture,
-                onPlacedFurnitureTap: selectPlacedFurnitureForReposition
+                onPlace: placeSelectedFurniture
             )
             mapNavigation
+
+            if selectedFurnitureForPlacement == nil,
+               selectedPlacedFurnitureForReposition == nil {
+                homeFurnitureInteractionLayer
+            }
+
             fieldControls
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .topTrailing)
@@ -679,21 +684,49 @@ struct OverlayView: View {
         .clipped()
     }
 
-    private var mapNavigation: some View {
-        HStack {
-            mapDestinationButton(.home, direction: .left)
-                .padding(.leading, 10)
-            Spacer(minLength: 0)
-            mapDestinationButton(.field, direction: .right)
-                .padding(.trailing, 10)
+    /// 전체 화면 내비게이션 레이어보다 앞에서 가구의 실제 표시 영역을 클릭 대상으로 쓴다.
+    /// 편집 중에는 이 레이어를 숨겨 아래의 배치 그리드가 이동 클릭을 받도록 한다.
+    private var homeFurnitureInteractionLayer: some View {
+        ForEach(state.home.placedFurniture) { placedFurniture in
+            if let furniture = FurnitureCatalog.item(withID: placedFurniture.furnitureID) {
+                Button(action: {
+                    selectPlacedFurnitureForReposition(placedFurniture)
+                }) {
+                    Rectangle()
+                        .fill(Color.black.opacity(0.001))
+                        .frame(width: furniture.renderSize, height: furniture.renderSize)
+                }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .position(
+                    x: (CGFloat(placedFurniture.column) + 0.5) * HomeRoomView.tileSize,
+                    y: (CGFloat(placedFurniture.row) + 0.5) * HomeRoomView.tileSize
+                )
+                .zIndex(
+                    2 + Double(placedFurniture.row) / 100
+                        + Double(placedFurniture.column) / 10_000
+                )
+                .accessibilityLabel(L10n.text(
+                    "배치된 \(furniture.displayName). 눌러서 재배치하기",
+                    "Placed \(furniture.displayName). Select to reposition it"
+                ))
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .overlay(alignment: .bottom) {
+    }
+
+    private var mapNavigation: some View {
+        GeometryReader { geometry in
+            mapDestinationButton(.home, direction: .left)
+                .position(x: 29, y: geometry.size.height / 2)
+            mapDestinationButton(.field, direction: .right)
+                .position(x: geometry.size.width - 29, y: geometry.size.height / 2)
+
             HStack(spacing: 3) {
                 navigationIndicator(isActive: state.selectedMapLocation == .home)
                 navigationIndicator(isActive: state.selectedMapLocation == .field)
             }
-            .padding(.bottom, 8)
+            .position(x: geometry.size.width / 2, y: geometry.size.height - 14)
+            .allowsHitTesting(false)
         }
     }
 
@@ -707,12 +740,12 @@ struct OverlayView: View {
                     .resizable()
                     .interpolation(.none)
                     .scaledToFit()
-                    .frame(width: 44, height: 44)
+                    .frame(width: 22, height: 22)
             } else {
                 Image(systemName: location == .field ? "leaf.fill" : "house.fill")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(fp.border)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 22, height: 22)
             }
         }
         .buttonStyle(NavigationAssetButtonStyle(direction: direction))

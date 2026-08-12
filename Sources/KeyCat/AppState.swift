@@ -296,11 +296,16 @@ final class AppState: ObservableObject {
 
     init() {
         isOnboardingPresented = !UserDefaults.standard.bool(forKey: onboardingCompletedKey)
+#if DEBUG
+        // 개발 중에는 고가의 고양이와 가구 구매 흐름을 바로 검증할 수 있게 한다.
+        coins = max(UserDefaults.standard.integer(forKey: coinsKey), 1_000_000)
+#else
         if UserDefaults.standard.object(forKey: coinsKey) == nil {
             coins = 30
         } else {
             coins = UserDefaults.standard.integer(forKey: coinsKey)
         }
+#endif
         autoModeEnabled = UserDefaults.standard.bool(forKey: autoModeKey)
         var initialUnlockedCatIDs = UserDefaults.standard.data(forKey: unlockedCatIDsKey)
             .flatMap { try? JSONDecoder().decode(Set<String>.self, from: $0) }

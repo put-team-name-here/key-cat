@@ -130,4 +130,27 @@ final class BalanceTests: XCTestCase {
         ))
         XCTAssertTrue(home.isOccupied(row: 0, column: 0))
     }
+
+    func testFurnitureCanBeSelectedFromItsVisibleAreaOutsideTheTile() {
+        let furniture = FurnitureCatalog.all.first(where: { $0.id == "farm_256_06" })!
+        let placed = PlacedFurniture(furnitureID: furniture.id, row: 4, column: 3)
+        var home = HomeData()
+        home.placedFurniture = [placed]
+        let center = CGPoint(
+            x: (CGFloat(placed.column) + 0.5) * HomeRoomView.tileSize,
+            y: (CGFloat(placed.row) + 0.5) * HomeRoomView.tileSize
+        )
+
+        XCTAssertEqual(
+            HomeRoomView.placedFurniture(
+                in: home,
+                at: CGPoint(x: center.x + 50, y: center.y)
+            ),
+            placed
+        )
+        XCTAssertNil(HomeRoomView.placedFurniture(
+            in: home,
+            at: CGPoint(x: center.x + furniture.renderSize, y: center.y)
+        ))
+    }
 }

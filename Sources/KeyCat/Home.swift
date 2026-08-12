@@ -343,16 +343,16 @@ struct NavigationAssetButtonStyle: ButtonStyle {
                     .resizable()
                     .interpolation(.none)
                     .scaledToFit()
-                    .frame(width: 60, height: 60)
+                    .frame(width: 30, height: 30)
             } else {
                 Image(systemName: direction == .left ? "chevron.left" : "chevron.right")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.primary)
-                    .frame(width: 60, height: 60)
+                    .frame(width: 30, height: 30)
             }
             configuration.label
         }
-        .frame(width: 64, height: 110, alignment: .top)
+        .frame(width: 38, height: 62, alignment: .top)
         .contentShape(Rectangle())
         .opacity(isEnabled ? 1 : 0.55)
     }
@@ -382,13 +382,14 @@ struct FurnitureAssetImage: View {
 }
 
 struct HomeRoomView: View {
+    static let tileSize: CGFloat = 45
+
     let home: HomeData
     let selectedFurniture: FurnitureItem?
     let selectedPlacedFurniture: PlacedFurniture?
     let onPlace: (FarmTileCoordinate) -> Void
-    let onPlacedFurnitureTap: (PlacedFurniture) -> Void
 
-    private let tileSize: CGFloat = 45
+    private let tileSize: CGFloat = Self.tileSize
     private let roomWidth: CGFloat = CGFloat(HomeData.cols) * 45
     private let roomHeight: CGFloat = CGFloat(HomeData.rows) * 45
 
@@ -403,26 +404,14 @@ struct HomeRoomView: View {
 
             ForEach(home.placedFurniture) { placed in
                 if let furniture = FurnitureCatalog.item(withID: placed.furnitureID) {
-                    Button(action: { onPlacedFurnitureTap(placed) }) {
-                        Color.clear
-                            .frame(width: tileSize, height: tileSize)
-                            .overlay {
-                                FurnitureAssetImage(
-                                    furniture: furniture,
-                                    size: furniture.renderSize
-                                )
-                                .allowsHitTesting(false)
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .frame(width: tileSize, height: tileSize)
+                    FurnitureAssetImage(
+                        furniture: furniture,
+                        size: furniture.renderSize
+                    )
+                    .allowsHitTesting(false)
                     .position(position(for: placed))
                     .zIndex(2 + Double(placed.row) / 100 + Double(placed.column) / 10_000)
-                    .accessibilityLabel(L10n.text(
-                        "배치된 \(furniture.displayName). 눌러서 재배치하기",
-                        "Placed \(furniture.displayName). Select to reposition it"
-                    ))
+                    .accessibilityHidden(true)
                 }
             }
         }
@@ -499,5 +488,26 @@ struct HomeRoomView: View {
             x: (CGFloat(placed.column) + 0.5) * tileSize,
             y: (CGFloat(placed.row) + 0.5) * tileSize
         )
+    }
+
+    /// 실제 가구 이미지 전체를 기준으로 가장 앞에 보이는 가구를 찾는다.
+    /// 한 타일보다 큰 가구의 가장자리를 눌러도 편집할 수 있어야 한다.
+    static func placedFurniture(in home: HomeData, at point: CGPoint) -> PlacedFurniture? {
+        home.placedFurniture
+            .filter { placed in
+                guard let furniture = FurnitureCatalog.item(withID: placed.furnitureID) else {
+                    return false
+                }
+                let center = CGPoint(
+                    x: (CGFloat(placed.column) + 0.5) * tileSize,
+                    y: (CGFloat(placed.row) + 0.5) * tileSize
+                )
+                let halfSize = furniture.renderSize / 2
+                return abs(point.x - center.x) <= halfSize
+                    && abs(point.y - center.y) <= halfSize
+            }
+            .max { lhs, rhs in
+                lhs.row == rhs.row ? lhs.column < rhs.column : lhs.row < rhs.row
+            }
     }
 }
