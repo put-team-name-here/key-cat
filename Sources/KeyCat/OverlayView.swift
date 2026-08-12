@@ -742,7 +742,7 @@ struct OverlayView: View {
 
                 if selectedPlacedFurnitureForReposition != nil {
                     homePlacementControl(
-                        title: L10n.text("창고", "Storage"),
+                        title: L10n.text("창고로", "To Storage"),
                         systemImage: "archivebox",
                         background: fp.cell,
                         action: returnSelectedPlacedFurniture,
@@ -905,13 +905,6 @@ struct OverlayView: View {
             ))
                 .font(galmuriFont(9))
                 .foregroundColor(fp.border)
-            Button(action: cancelFurniturePlacement) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(fp.border)
-                    .frame(width: 18, height: 18)
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 4)
