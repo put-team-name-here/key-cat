@@ -32,6 +32,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         counter.onCoinEarned = { [weak self] amount in
             self?.state.earnCoins(amount)
         }
+        counter.onHundredKeysTyped = { [weak self] in
+            self?.state.earnTypingMilestoneBonus()
+        }
         counter.start()
     }
 

@@ -4,22 +4,48 @@ import SwiftUI
 
 /// 확장 화면에서 이동할 수 있는 맵 위치.
 enum MapLocation: String, CaseIterable, Identifiable {
-    case field
     case home
+    case field
+    case expansion
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .field: return L10n.text("농장", "Field")
         case .home: return L10n.text("집", "Home")
+        case .field: return L10n.text("농장", "Field")
+        case .expansion: return L10n.text("확장 농장", "Expansion Field")
         }
     }
 
     var navigationIconResource: String {
         switch self {
-        case .field: return "icon_field"
         case .home: return "icon_home"
+        case .field, .expansion: return "icon_field"
+        }
+    }
+
+    var previous: MapLocation? {
+        switch self {
+        case .home: return nil
+        case .field: return .home
+        case .expansion: return .field
+        }
+    }
+
+    var next: MapLocation? {
+        switch self {
+        case .home: return .field
+        case .field: return .expansion
+        case .expansion: return nil
+        }
+    }
+
+    var farmArea: FarmArea? {
+        switch self {
+        case .home: return nil
+        case .field: return .main
+        case .expansion: return .expansion
         }
     }
 }
@@ -28,7 +54,7 @@ enum MapLocation: String, CaseIterable, Identifiable {
 enum StorageCategory: String, CaseIterable, Identifiable {
     case seeds
     case crops
-    case furniture
+    case toys
 
     var id: String { rawValue }
 
@@ -36,80 +62,186 @@ enum StorageCategory: String, CaseIterable, Identifiable {
         switch self {
         case .seeds: return L10n.text("씨앗", "Seeds")
         case .crops: return L10n.text("작물", "Crops")
-        case .furniture: return L10n.text("가구", "Furniture")
+        case .toys: return L10n.text("장난감", "Toys")
         }
     }
 }
 
-enum FurnitureGroup: String, Hashable {
-    case antique
-    case farm
+enum FurnitureEffect: Hashable {
+    case cropSaleBonus(percent: Int)
+    case growthSpeedBonus(percent: Int)
+    case typingBonusPerHundred(coins: Int)
+
+    var displayDescription: String {
+        switch self {
+        case .cropSaleBonus(let percent):
+            return L10n.text(
+                "집에 배치 시 작물 판매가 +\(percent)%",
+                "+\(percent)% crop sale value while placed"
+            )
+        case .growthSpeedBonus(let percent):
+            return L10n.text(
+                "집에 배치 시 작물 성장 속도 +\(percent)%",
+                "+\(percent)% crop growth speed while placed"
+            )
+        case .typingBonusPerHundred(let coins):
+            return L10n.text(
+                "집에 배치 시 100타마다 +\(coins)코인",
+                "+\(coins) coins per 100 keys while placed"
+            )
+        }
+    }
 }
 
-/// 상점과 창고에서 공통으로 사용하는 가구 상품 메타데이터.
+/// 상점과 창고에서 공통으로 사용하는 장난감 상품 메타데이터.
 struct FurnitureItem: Identifiable, Hashable {
     let id: String
     let resourceName: String
     let displayNameKorean: String
     let displayNameEnglish: String
     let purchasePrice: Int
-    let group: FurnitureGroup
+    let effect: FurnitureEffect?
+
+    init(
+        id: String,
+        resourceName: String,
+        displayNameKorean: String,
+        displayNameEnglish: String,
+        purchasePrice: Int,
+        effect: FurnitureEffect? = nil
+    ) {
+        self.id = id
+        self.resourceName = resourceName
+        self.displayNameKorean = displayNameKorean
+        self.displayNameEnglish = displayNameEnglish
+        self.purchasePrice = purchasePrice
+        self.effect = effect
+    }
 
     var displayName: String {
         L10n.text(displayNameKorean, displayNameEnglish)
     }
 
-    /// 256px 원본을 방의 한 칸보다 조금 크게 보여 주어 픽셀 아트 실루엣을 유지한다.
-    var renderSize: CGFloat {
-        group == .antique ? 124 : 116
+    /// 장난감은 구매 한 번에 한 개만 담는다.
+    var maximumPurchaseQuantityPerTransaction: Int? { 1 }
+
+    /// 장난감은 창고와 집 배치를 합쳐 종류별 한 개만 소유한다.
+    var maximumOwnedQuantity: Int? { 1 }
+
+    func allowsPurchase(quantity: Int, currentlyOwned: Int) -> Bool {
+        guard quantity > 0, currentlyOwned >= 0 else { return false }
+        if let maximumPurchaseQuantityPerTransaction,
+           quantity > maximumPurchaseQuantityPerTransaction {
+            return false
+        }
+        if let maximumOwnedQuantity,
+           currentlyOwned > maximumOwnedQuantity - quantity {
+            return false
+        }
+        return true
     }
+
+    /// 256px 원본 장난감을 방 안에서 고양이를 가리지 않도록 작게 표시한다.
+    var renderSize: CGFloat { 72 }
 }
 
-/// 제공된 개별 가구 PNG 39개를 상품 목록으로 연결한다.
+/// 배치 효과가 있는 장난감 5종만 상품 목록으로 연결한다.
 enum FurnitureCatalog {
-    private static let antiquePrices = [
-        120, 50, 50, 80, 180, 150, 200, 240, 300, 350,
-        90, 280, 240, 60, 100, 300, 220, 70, 100
+    static let toys: [FurnitureItem] = [
+        FurnitureItem(
+            id: "01_yarn_ball_256",
+            resourceName: "01_yarn_ball_256",
+            displayNameKorean: "실뭉치",
+            displayNameEnglish: "Jingle Yarn Ball",
+            purchasePrice: 150_000,
+            effect: .growthSpeedBonus(percent: 5)
+        ),
+        FurnitureItem(
+            id: "02_feather_wand_256",
+            resourceName: "02_feather_wand_256",
+            displayNameKorean: "낚시대",
+            displayNameEnglish: "Feather Wand",
+            purchasePrice: 225_000,
+            effect: .cropSaleBonus(percent: 10)
+        ),
+        FurnitureItem(
+            id: "03_plush_fish_256",
+            resourceName: "03_plush_fish_256",
+            displayNameKorean: "인형",
+            displayNameEnglish: "Plush Fish",
+            purchasePrice: 100_000,
+            effect: .cropSaleBonus(percent: 5)
+        ),
+        FurnitureItem(
+            id: "04_toy_mouse_256",
+            resourceName: "04_toy_mouse_256",
+            displayNameKorean: "쥐 인형",
+            displayNameEnglish: "Toy Mouse",
+            purchasePrice: 75_000,
+            effect: .typingBonusPerHundred(coins: 1)
+        ),
+        FurnitureItem(
+            id: "05_coil_spring_256",
+            resourceName: "05_coil_spring_256",
+            displayNameKorean: "스프링",
+            displayNameEnglish: "Coil Spring",
+            purchasePrice: 175_000,
+            effect: .typingBonusPerHundred(coins: 2)
+        ),
     ]
 
-    private static let farmPrices = [
-        35, 60, 90, 45, 35, 30, 120, 70, 100, 40,
-        35, 90, 80, 110, 30, 35, 100, 55, 40, 45
-    ]
-
-    static let all: [FurnitureItem] = makeItems(
-        prefix: "antique",
-        group: .antique,
-        prices: antiquePrices
-    ) + makeItems(
-        prefix: "farm",
-        group: .farm,
-        prices: farmPrices
-    )
+    static let all: [FurnitureItem] = toys
 
     static func item(withID id: String) -> FurnitureItem? {
         all.first { $0.id == id }
     }
 
-    private static func makeItems(
-        prefix: String,
-        group: FurnitureGroup,
-        prices: [Int]
-    ) -> [FurnitureItem] {
-        prices.enumerated().map { offset, price in
-            let number = String(format: "%02d", offset + 1)
-            let id = "\(prefix)_256_\(number)"
-            let koreanGroup = group == .antique ? "앤틱 가구" : "농장 가구"
-            let englishGroup = group == .antique ? "Antique Furniture" : "Farm Furniture"
-            return FurnitureItem(
-                id: id,
-                resourceName: id,
-                displayNameKorean: "\(koreanGroup) \(number)",
-                displayNameEnglish: "\(englishGroup) \(number)",
-                purchasePrice: price,
-                group: group
+}
+
+struct HomeBonusSummary: Equatable {
+    var cropSaleBonusPercent = 0
+    var growthSpeedBonusPercent = 0
+    var typingBonusPerHundred = 0
+
+    mutating func add(_ effect: FurnitureEffect) {
+        switch effect {
+        case .cropSaleBonus(let percent):
+            cropSaleBonusPercent = Self.addingWithoutOverflow(
+                cropSaleBonusPercent,
+                max(0, percent)
+            )
+        case .growthSpeedBonus(let percent):
+            growthSpeedBonusPercent = Self.addingWithoutOverflow(
+                growthSpeedBonusPercent,
+                max(0, percent)
+            )
+        case .typingBonusPerHundred(let coins):
+            typingBonusPerHundred = Self.addingWithoutOverflow(
+                typingBonusPerHundred,
+                max(0, coins)
             )
         }
+    }
+
+    private static func addingWithoutOverflow(_ lhs: Int, _ rhs: Int) -> Int {
+        let (sum, overflow) = lhs.addingReportingOverflow(rhs)
+        return overflow ? Int.max : sum
+    }
+
+    func cropSaleProceeds(unitPrice: Int, quantity: Int) -> Int? {
+        guard unitPrice >= 0, quantity > 0 else { return nil }
+        let (baseProceeds, baseOverflow) = unitPrice.multipliedReportingOverflow(by: quantity)
+        guard !baseOverflow else { return nil }
+        let (scaledBonus, bonusOverflow) = baseProceeds
+            .multipliedReportingOverflow(by: cropSaleBonusPercent)
+        guard !bonusOverflow else { return nil }
+        let (total, totalOverflow) = baseProceeds.addingReportingOverflow(scaledBonus / 100)
+        return totalOverflow ? nil : total
+    }
+
+    func growthDuration(from baseDuration: TimeInterval) -> TimeInterval {
+        guard baseDuration > 0 else { return baseDuration }
+        return baseDuration / (1 + Double(growthSpeedBonusPercent) / 100)
     }
 }
 
@@ -135,6 +267,15 @@ struct FurnitureInventory: Codable {
         guard quantity > 0, count(of: furniture) >= quantity else { return false }
         quantities[furniture.id, default: 0] -= quantity
         return true
+    }
+
+    /// 제거된 일반 가구는 버리고 현재 장난감 카탈로그의 보유분만 한 개씩 유지한다.
+    func toysOnly() -> FurnitureInventory {
+        var inventory = FurnitureInventory()
+        for toy in FurnitureCatalog.toys where count(of: toy) > 0 {
+            _ = inventory.add(toy)
+        }
+        return inventory
     }
 }
 
@@ -167,6 +308,15 @@ struct HomeData: Codable {
     func isOccupied(row: Int, column: Int) -> Bool {
         placedFurniture.contains { $0.row == row && $0.column == column }
     }
+
+    var activeBonuses: HomeBonusSummary {
+        placedFurniture.reduce(into: HomeBonusSummary()) { summary, placed in
+            guard let effect = FurnitureCatalog.item(withID: placed.furnitureID)?.effect else {
+                return
+            }
+            summary.add(effect)
+        }
+    }
 }
 
 /// 집 배치와 가구 보유량을 함께 저장하는 스냅샷.
@@ -192,10 +342,10 @@ enum HomeStorage {
     static func load(
         fallbackFurnitureInventory: FurnitureInventory = FurnitureInventory()
     ) -> HomeStateSnapshot {
-        let fallback = HomeStateSnapshot(
+        let fallback = toysOnly(HomeStateSnapshot(
             home: HomeData(),
             furnitureInventory: fallbackFurnitureInventory
-        )
+        ))
         let fileManager = FileManager.default
 
         guard fileManager.fileExists(atPath: fileURL.path) else {
@@ -209,7 +359,9 @@ enum HomeStorage {
         }
 
         if let snapshot = try? JSONDecoder().decode(HomeStateSnapshot.self, from: data) {
-            return snapshot
+            let migrated = toysOnly(snapshot)
+            _ = save(migrated)
+            return migrated
         }
 
         // 첫 구현에서 저장한 HomeData 형식은 가구 인벤토리와 함께 마이그레이션한다.
@@ -218,8 +370,9 @@ enum HomeStorage {
                 home: legacyHome,
                 furnitureInventory: fallbackFurnitureInventory
             )
-            _ = save(migrated)
-            return migrated
+            let toysOnlySnapshot = toysOnly(migrated)
+            _ = save(toysOnlySnapshot)
+            return toysOnlySnapshot
         }
 
         // 손상된 파일은 백업 후에만 새 파일을 만들 수 있다. 백업에 실패하면
@@ -228,6 +381,17 @@ enum HomeStorage {
             _ = save(fallback)
         }
         return fallback
+    }
+
+    static func toysOnly(_ snapshot: HomeStateSnapshot) -> HomeStateSnapshot {
+        var home = snapshot.home
+        home.placedFurniture.removeAll {
+            FurnitureCatalog.item(withID: $0.furnitureID) == nil
+        }
+        return HomeStateSnapshot(
+            home: home,
+            furnitureInventory: snapshot.furnitureInventory.toysOnly()
+        )
     }
 
     @discardableResult

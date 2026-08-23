@@ -26,6 +26,18 @@ enum FarmBoundaryEdge {
 struct FarmWorkTask: Equatable {
     let kind: FarmWorkKind
     let tile: FarmTileCoordinate
+    let area: FarmArea
+
+    init(kind: FarmWorkKind, tile: FarmTileCoordinate, area: FarmArea = .main) {
+        self.kind = kind
+        self.tile = tile
+        self.area = area
+    }
+}
+
+enum FarmArea: String, CaseIterable, Codable {
+    case main
+    case expansion
 }
 
 /// 밭 한 칸의 잔디 종류. grounds/ 리소스 이미지 선택에 쓰인다.
@@ -46,12 +58,24 @@ enum FieldTileState: String, Codable {
     case empty
     case carrotSeed
     case cabbageSeed
+    case tomatoSeed
+    case peachSeed
+    case durianSeed
     case wateredCarrotSeed
     case wateredCabbageSeed
+    case wateredTomatoSeed
+    case wateredPeachSeed
+    case wateredDurianSeed
     case growingCarrot
     case growingCabbage
+    case growingTomato
+    case growingPeach
+    case growingDurian
     case matureCarrot
     case matureCabbage
+    case matureTomato
+    case maturePeach
+    case matureDurian
 
     var growthImageName: String? {
         switch self {
@@ -64,24 +88,88 @@ enum FieldTileState: String, Codable {
         case .wateredCabbageSeed: return "cabbage_growth_01"
         case .growingCabbage: return "cabbage_growth_02"
         case .matureCabbage: return "cabbage_growth_03"
+        case .tomatoSeed: return "tomato_growth_01"
+        case .wateredTomatoSeed: return "tomato_growth_01"
+        case .growingTomato: return "tomato_growth_02"
+        case .matureTomato: return "tomato_growth_03"
+        case .peachSeed: return "peach_growth_01"
+        case .wateredPeachSeed: return "peach_growth_01"
+        case .growingPeach: return "peach_growth_02"
+        case .maturePeach: return "peach_growth_03"
+        case .durianSeed: return "durian_growth_01"
+        case .wateredDurianSeed: return "durian_growth_01"
+        case .growingDurian: return "durian_growth_02"
+        case .matureDurian: return "durian_growth_03"
         }
     }
 
     var needsWater: Bool {
-        self == .carrotSeed || self == .cabbageSeed
+        switch self {
+        case .carrotSeed, .cabbageSeed, .tomatoSeed, .peachSeed, .durianSeed: return true
+        default: return false
+        }
     }
 
     var isWatered: Bool {
-        self == .wateredCarrotSeed || self == .wateredCabbageSeed
-            || self == .growingCarrot || self == .growingCabbage
-            || self == .matureCarrot || self == .matureCabbage
+        switch self {
+        case .wateredCarrotSeed, .wateredCabbageSeed, .wateredTomatoSeed,
+             .wateredPeachSeed, .wateredDurianSeed, .growingCarrot, .growingCabbage,
+             .growingTomato, .growingPeach, .growingDurian, .matureCarrot,
+             .matureCabbage, .matureTomato, .maturePeach, .matureDurian:
+            return true
+        default:
+            return false
+        }
     }
 
     var watered: FieldTileState {
         switch self {
         case .carrotSeed: return .wateredCarrotSeed
         case .cabbageSeed: return .wateredCabbageSeed
+        case .tomatoSeed: return .wateredTomatoSeed
+        case .peachSeed: return .wateredPeachSeed
+        case .durianSeed: return .wateredDurianSeed
         default: return self
+        }
+    }
+
+    var growingSeedKind: SeedKind? {
+        switch self {
+        case .wateredCarrotSeed, .growingCarrot: return .carrot
+        case .wateredCabbageSeed, .growingCabbage: return .cabbage
+        case .wateredTomatoSeed, .growingTomato: return .tomato
+        case .wateredPeachSeed, .growingPeach: return .peach
+        case .wateredDurianSeed, .growingDurian: return .durian
+        default: return nil
+        }
+    }
+
+    var nextGrowthStage: FieldTileState? {
+        switch self {
+        case .wateredCarrotSeed: return .growingCarrot
+        case .wateredCabbageSeed: return .growingCabbage
+        case .wateredTomatoSeed: return .growingTomato
+        case .wateredPeachSeed: return .growingPeach
+        case .wateredDurianSeed: return .growingDurian
+        default: return nil
+        }
+    }
+
+    var matureStage: FieldTileState? {
+        switch self {
+        case .wateredCarrotSeed, .growingCarrot: return .matureCarrot
+        case .wateredCabbageSeed, .growingCabbage: return .matureCabbage
+        case .wateredTomatoSeed, .growingTomato: return .matureTomato
+        case .wateredPeachSeed, .growingPeach: return .maturePeach
+        case .wateredDurianSeed, .growingDurian: return .matureDurian
+        default: return nil
+        }
+    }
+
+    var isMature: Bool {
+        switch self {
+        case .matureCarrot, .matureCabbage, .matureTomato, .maturePeach, .matureDurian: return true
+        default: return false
         }
     }
 }
@@ -101,6 +189,16 @@ struct FarmFieldData: Codable {
     static let dryGroundBottomMargin = 1
     /// 고양이집이 놓인 그리드 좌표 (x: 6, y: 3).
     static let catHouseCoordinate = FarmTileCoordinate(row: 3, column: 6)
+
+    static var dryGroundCoordinates: [FarmTileCoordinate] {
+        (0..<rows).flatMap { row in
+            (0..<cols).compactMap { column in
+                isDryGround(row: row, column: column)
+                    ? FarmTileCoordinate(row: row, column: column)
+                    : nil
+            }
+        }
+    }
 
     var tiles: [FieldTile] // row-major, count == cols * rows
 
@@ -168,6 +266,54 @@ struct FarmFieldData: Codable {
     }
 }
 
+enum ExpansionPlotPricing {
+    static let prices = Array(repeating: 500_000, count: 16)
+
+    static func price(for plotNumber: Int) -> Int? {
+        guard prices.indices.contains(plotNumber - 1) else { return nil }
+        return prices[plotNumber - 1]
+    }
+}
+
+enum SeedPlantingPriority {
+    static func nextSeed(preferred: SeedKind, available: [SeedKind]) -> SeedKind? {
+        if available.contains(preferred) { return preferred }
+        return SeedKind.allCases.first { available.contains($0) }
+    }
+}
+
+struct ExpansionFarmData: Codable {
+    var field: FarmFieldData
+    private(set) var purchasedPlotCount: Int
+
+    init(field: FarmFieldData = .randomLayout(), purchasedPlotCount: Int = 0) {
+        self.field = field
+        self.purchasedPlotCount = min(max(purchasedPlotCount, 0), ExpansionPlotPricing.prices.count)
+    }
+
+    var nextPlotNumber: Int? {
+        let next = purchasedPlotCount + 1
+        return ExpansionPlotPricing.prices.indices.contains(next - 1) ? next : nil
+    }
+
+    func plotNumber(row: Int, column: Int) -> Int? {
+        FarmFieldData.dryGroundCoordinates.firstIndex {
+            $0.row == row && $0.column == column
+        }.map { $0 + 1 }
+    }
+
+    func isPurchased(row: Int, column: Int) -> Bool {
+        guard let plotNumber = plotNumber(row: row, column: column) else { return false }
+        return plotNumber <= purchasedPlotCount
+    }
+
+    mutating func purchaseNext(plotNumber: Int) -> Bool {
+        guard plotNumber == nextPlotNumber else { return false }
+        purchasedPlotCount += 1
+        return true
+    }
+}
+
 /// 밭 JSON 파일 읽기/쓰기. 파일이 없으면 랜덤 배치로 새로 만들어 저장한다.
 enum FarmFieldStorage {
     private static var fileURL: URL {
@@ -189,6 +335,31 @@ enum FarmFieldStorage {
     }
 
     static func save(_ field: FarmFieldData) {
+        guard let data = try? JSONEncoder().encode(field) else { return }
+        try? data.write(to: fileURL, options: .atomic)
+    }
+}
+
+enum ExpansionFarmStorage {
+    private static var fileURL: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let dir = base.appendingPathComponent("KeyCat", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("expansion-farm.json")
+    }
+
+    static func load() -> ExpansionFarmData {
+        guard let data = try? Data(contentsOf: fileURL),
+              let field = try? JSONDecoder().decode(ExpansionFarmData.self, from: data)
+        else {
+            let field = ExpansionFarmData()
+            save(field)
+            return field
+        }
+        return field
+    }
+
+    static func save(_ field: ExpansionFarmData) {
         guard let data = try? JSONEncoder().encode(field) else { return }
         try? data.write(to: fileURL, options: .atomic)
     }

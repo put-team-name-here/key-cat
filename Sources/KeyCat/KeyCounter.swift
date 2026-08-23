@@ -11,6 +11,7 @@ final class KeyCounter: ObservableObject {
     @Published var permissionGranted = false
     @Published var isPaused = false
     var onCoinEarned: ((Int) -> Void)?
+    var onHundredKeysTyped: (() -> Void)?
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -105,6 +106,9 @@ final class KeyCounter: ObservableObject {
         if count.isMultiple(of: 10) {
             saveDailyCounts()
             onCoinEarned?(1)
+            if count.isMultiple(of: 100) {
+                onHundredKeysTyped?()
+            }
         } else {
             scheduleSave()
         }

@@ -46,6 +46,7 @@
 		A20000000000000000000014 /* gui */ = {isa = PBXFileReference; lastKnownFileType = folder; path = gui; sourceTree = "<group>"; };
 		A20000000000000000000015 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A20000000000000000000016 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
+		A20000000000000000000017 /* Home.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Home.swift; sourceTree = "<group>"; };
 		A20000000000000000000020 /* KeyCat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KeyCat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000021 /* KeyCat.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KeyCat.entitlements; sourceTree = "<group>"; };
 		A20000000000000000000022 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
@@ -53,7 +54,6 @@
 		A20000000000000000000024 /* furniture */ = {isa = PBXFileReference; lastKnownFileType = folder; path = furniture; sourceTree = "<group>"; };
 		A20000000000000000000025 /* home */ = {isa = PBXFileReference; lastKnownFileType = folder; path = home; sourceTree = "<group>"; };
 		A20000000000000000000026 /* navigation */ = {isa = PBXFileReference; lastKnownFileType = folder; path = navigation; sourceTree = "<group>"; };
-		A20000000000000000000017 /* Home.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Home.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -246,7 +246,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Config/KeyCat.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-
 				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 5XL9G5DWBD;
@@ -269,7 +268,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.putteamnamehere.keycat.app.debug;
 			};
 			name = Debug;
@@ -303,7 +302,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.putteamnamehere.keycat.app;
 			};
 			name = Release;

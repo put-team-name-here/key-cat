@@ -52,6 +52,9 @@ struct FarmPixelTheme {
     let primaryText = Color(hex: 0xfff8ef) // 활성 탭 텍스트
     let carrot = Color(hex: 0xc9a24a)      // 당근 새싹
     let cabbage = Color(hex: 0x8aad55)     // 양배추 새싹
+    let tomato = Color(hex: 0xd9583f)
+    let peach = Color(hex: 0xf09a82)
+    let durian = Color(hex: 0xa69b45)
 
     static let shared = FarmPixelTheme()
 }

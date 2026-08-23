@@ -64,7 +64,7 @@ enum CatCatalog {
               wateringSheet: "tuxedo_watering", wateringRows: 3, wateringFrameCount: 8, harvestSheet: "tuxedo_harvest"),
         .init(id: "oddeye", name: "오드아이", front: "oddeye_front", leftSheet: "oddeye_left", rightSheet: "oddeye_right",
               wateringSheet: "oddeye_watering", wateringRows: 3, wateringFrameCount: 8, harvestSheet: "oddeye_harvest"),
-        .init(id: "persian", name: "페르시안", front: "persian_front", leftSheet: "persian_side", rightSheet: nil,
+        .init(id: "persian", name: "페르시안", front: "persian_front", leftSheet: "persian_walk", rightSheet: nil,
               wateringSheet: "persian_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "persian_idle"),
         .init(id: "calico", name: "삼색냥", front: "calico_front", leftSheet: "calico_side", rightSheet: nil,
               wateringSheet: "calico_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "calico_idle"),
@@ -73,6 +73,62 @@ enum CatCatalog {
         .init(id: "british_shorthair", name: "브리티시 쇼트헤어", front: "british_shorthair_front", leftSheet: "british_shorthair_side", rightSheet: nil,
               wateringSheet: "british_shorthair_watering", wateringRows: 2, wateringFrameCount: 6, harvestSheet: "british_shorthair_idle"),
     ]
+}
+
+/// 보유 고양이를 가운데 농장과 오른쪽 확장 농장에 한 마리씩 배정한다.
+/// 서로 다른 두 마리가 필요하므로 보유 고양이가 한 마리뿐이면 확장 농장은 비워 둔다.
+enum FarmCatAssignment {
+    static func normalized(
+        _ assignments: [FarmArea: String],
+        unlockedCatIDs: Set<String>,
+        catalogIDs: [String] = CatCatalog.all.map(\.id)
+    ) -> [FarmArea: String] {
+        let availableIDs = catalogIDs.filter(unlockedCatIDs.contains)
+        var result: [FarmArea: String] = [:]
+        var usedIDs: Set<String> = []
+
+        for area in FarmArea.allCases {
+            if let savedID = assignments[area],
+               availableIDs.contains(savedID),
+               usedIDs.insert(savedID).inserted {
+                result[area] = savedID
+            }
+        }
+        for area in FarmArea.allCases where result[area] == nil {
+            guard let nextID = availableIDs.first(where: { !usedIDs.contains($0) }) else { break }
+            result[area] = nextID
+            usedIDs.insert(nextID)
+        }
+        return result
+    }
+
+    static func assigning(
+        catID: String,
+        to area: FarmArea,
+        current assignments: [FarmArea: String]
+    ) -> [FarmArea: String] {
+        guard assignments[area] != catID else { return assignments }
+        var updated = assignments
+        let previousWorkerID = updated[area]
+        if let otherArea = FarmArea.allCases.first(where: {
+            $0 != area && updated[$0] == catID
+        }) {
+            updated[otherArea] = previousWorkerID
+        }
+        updated[area] = catID
+        return updated
+    }
+
+    static func homeCatIDs(
+        unlockedCatIDs: Set<String>,
+        assignments: [FarmArea: String],
+        catalogIDs: [String] = CatCatalog.all.map(\.id)
+    ) -> [String] {
+        let farmWorkerIDs = Set(assignments.values)
+        return catalogIDs.filter {
+            unlockedCatIDs.contains($0) && !farmWorkerIDs.contains($0)
+        }
+    }
 }
 
 // MARK: - 스프라이트 시트 (384x384, 3x3 격자, 8프레임)
@@ -295,6 +351,78 @@ struct FarmFieldGrassView: View {
     }
 }
 
+/// 오른쪽 확장 구역. 구매 전에는 잔디이며 1번부터 순서대로 밭으로 바뀐다.
+struct ExpansionFarmGrassView: View {
+    let expansion: ExpansionFarmData
+    var tileSize: CGFloat = 45
+    var onDryGroundTap: (_ row: Int, _ column: Int) -> Void = { _, _ in }
+    var onPlotPurchaseTap: (_ plotNumber: Int) -> Void = { _ in }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(0..<FarmFieldData.rows, id: \.self) { row in
+                HStack(spacing: 0) {
+                    ForEach(0..<FarmFieldData.cols, id: \.self) { column in
+                        expansionTile(row: row, column: column)
+                    }
+                }
+            }
+        }
+        .clipped()
+    }
+
+    @ViewBuilder private func expansionTile(row: Int, column: Int) -> some View {
+        let index = expansion.field.index(row: row, column: column)
+        let grass = expansion.field.tiles[index].grass
+        if let plotNumber = expansion.plotNumber(row: row, column: column) {
+            if expansion.isPurchased(row: row, column: column) {
+                let tileState = expansion.field.tiles[index].state
+                Button(action: {
+                    if tileState == .empty { onDryGroundTap(row, column) }
+                }) {
+                    ZStack {
+                        groundTile(tileState.isWatered ? "wet_ground" : "dry_ground")
+                        if let imageName = tileState.growthImageName {
+                            groundTile(imageName)
+                        }
+                    }
+                    .frame(width: tileSize, height: tileSize)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } else {
+                let isNext = expansion.nextPlotNumber == plotNumber
+                Button(action: {
+                    if isNext { onPlotPurchaseTap(plotNumber) }
+                }) {
+                    ZStack {
+                        groundTile(grass.imageName)
+                        Color.black.opacity(isNext ? 0.08 : 0.2)
+                        VStack(spacing: 1) {
+                            Image(systemName: isNext ? "plus" : "lock.fill")
+                                .font(.system(size: 8, weight: .bold))
+                            Text("\(plotNumber)")
+                                .font(galmuriFont(8))
+                        }
+                        .foregroundColor(isNext ? Color.white : Color.white.opacity(0.7))
+                    }
+                    .frame(width: tileSize, height: tileSize)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!isNext)
+                .accessibilityLabel(L10n.text(
+                    "확장 밭 \(plotNumber)번",
+                    "Expansion plot \(plotNumber)"
+                ))
+            }
+        } else {
+            groundTile(grass.imageName)
+                .frame(width: tileSize, height: tileSize)
+        }
+    }
+}
+
 // MARK: - 배회 모션 모델 (위치 적분 + 걷기 프레임 순환)
 
 /// 뷰와 분리한 고양이 이동 두뇌. 60fps 타이머로 위치를 적분하고
@@ -310,6 +438,7 @@ final class CatMotion: ObservableObject {
 
     private let speed: CGFloat                 // pt/sec
     private let frameInterval: CGFloat         // 걷기 프레임 교체 간격(초). 작을수록 높은 fps
+    private let startsAtRandomPosition: Bool
     private var bounds = CGSize.zero
     private var margin: CGFloat = 30
     private var target = CGPoint.zero
@@ -321,9 +450,14 @@ final class CatMotion: ObservableObject {
     private var workElapsed: CGFloat = 0
     private var workCompletion: (() -> Void)?
 
-    init(frameInterval: CGFloat, speed: CGFloat = 26) {
+    init(
+        frameInterval: CGFloat,
+        speed: CGFloat = 26,
+        startsAtRandomPosition: Bool = false
+    ) {
         self.frameInterval = frameInterval
         self.speed = speed
+        self.startsAtRandomPosition = startsAtRandomPosition
     }
 
     /// 배회 영역과 스프라이트 크기를 알려준다. 최초 1회만 위치를 초기화.
@@ -332,7 +466,16 @@ final class CatMotion: ObservableObject {
         self.margin = sprite / 2 + 2
         if !configured, bounds.width > 0, bounds.height > 0 {
             configured = true
-            position = CGPoint(x: bounds.width * 0.5, y: bounds.height * 0.55)
+            if startsAtRandomPosition {
+                let maxX = max(margin, bounds.width - margin)
+                let maxY = max(margin, bounds.height - margin)
+                position = CGPoint(
+                    x: CGFloat.random(in: margin...maxX),
+                    y: CGFloat.random(in: margin...maxY)
+                )
+            } else {
+                position = CGPoint(x: bounds.width * 0.5, y: bounds.height * 0.55)
+            }
             pickTarget()
         }
     }
@@ -473,6 +616,7 @@ struct WalkingCat: View {
          spriteSize: CGFloat = 46,
          fps: CGFloat = 9,
          speed: CGFloat = 26,
+         startsAtRandomPosition: Bool = false,
          farmTask: FarmWorkTask? = nil,
          farmTileSize: CGFloat = 45,
          harvestRewardImageName: String? = nil,
@@ -483,7 +627,11 @@ struct WalkingCat: View {
         self.farmTileSize = farmTileSize
         self.harvestRewardImageName = harvestRewardImageName
         self.onFarmTaskComplete = onFarmTaskComplete
-        _motion = StateObject(wrappedValue: CatMotion(frameInterval: 1.0 / fps, speed: speed))
+        _motion = StateObject(wrappedValue: CatMotion(
+            frameInterval: 1.0 / fps,
+            speed: speed,
+            startsAtRandomPosition: startsAtRandomPosition
+        ))
     }
 
     var body: some View {

@@ -103,8 +103,8 @@ private let onboardingPages: [OnboardingPage] = [
         id: 1,
         title: L10n.text("상점에서 씨앗을 사고 농사를 지어봐요!", "Buy seeds in the shop and start farming!"),
         description: L10n.text(
-            "상점 탭에서 당근과 양배추 씨앗을 구매해 밭에 심을 수 있어요.",
-            "Buy carrot and cabbage seeds from the Shop tab, then plant them in the field."
+            "상점에서 씨앗을 사고, 고양이를 모아 새로운 작물을 해금해 보세요.",
+            "Buy seeds and collect cats to unlock new crops."
         ),
         asset: .crops
     ),
@@ -156,6 +156,8 @@ struct OverlayView: View {
     private let rt = RetroTheme.shared
     private let fp = FarmPixelTheme.shared
     @State private var seedPickerTile: FarmTileCoordinate?
+    @State private var isPlantingPriorityPickerPresented = false
+    @State private var selectedExpansionPlotNumber: Int?
     @State private var selectedCropForSale: CropKind?
     @State private var saleQuantity = 1
     @State private var selectedSeedForPurchase: SeedKind?
@@ -167,8 +169,10 @@ struct OverlayView: View {
     @State private var hoveredHomeTile: FarmTileCoordinate?
     @State private var homePlacementPointer: CGPoint?
     @State private var selectedCodexCat: CodexCatEntry?
+    @State private var selectedCodexToy: FurnitureItem?
     @State private var selectedTypingDate: Date?
     @State private var purchaseQuantity = 1
+    @State private var seedPurchaseQuantityText = "1"
     @State private var onboardingStep = 0
 
     var body: some View {
@@ -596,6 +600,13 @@ struct OverlayView: View {
                         .onTapGesture { selectedCodexCat = nil }
                     codexCatPopup(for: cat)
                 }
+            } else if let toy = selectedCodexToy {
+                ZStack {
+                    Color.black.opacity(0.35)
+                        .contentShape(Rectangle())
+                        .onTapGesture { selectedCodexToy = nil }
+                    codexToyPopup(for: toy)
+                }
             } else if let date = selectedTypingDate {
                 ZStack {
                     Color.black.opacity(0.35)
@@ -616,6 +627,8 @@ struct OverlayView: View {
                 farmField
             case .home:
                 homeField
+            case .expansion:
+                expansionFarmField
             }
         }
     }
@@ -628,16 +641,18 @@ struct OverlayView: View {
                 seedPickerTile = FarmTileCoordinate(row: row, column: column)
             }
             catHouse
-            WalkingCat(
-                character: state.selectedCat,
-                spriteSize: 70.4,
-                fps: 9,
-                speed: 34,
-                farmTask: state.farmWorkQueue.first,
-                harvestRewardImageName: currentHarvestRewardImageName,
-                onFarmTaskComplete: state.completeFarmWork
-            )
+            if let worker = state.farmWorker(for: .main) {
+                WalkingCat(
+                    character: worker,
+                    spriteSize: 70.4,
+                    fps: 9,
+                    speed: 34,
+                    farmTask: state.visibleFarmTask(for: .main),
+                    harvestRewardImageName: currentHarvestRewardImageName,
+                    onFarmTaskComplete: state.completeFarmWork
+                )
                 .allowsHitTesting(false)
+            }
             mapNavigation
             fieldControls
                 .padding(10)
@@ -647,6 +662,54 @@ struct OverlayView: View {
                 seedPicker(for: tile)
                     .position(seedPickerPosition(for: tile))
                     .zIndex(1)
+            }
+        }
+        .frame(height: 540)
+        .clipped()
+    }
+
+    private var expansionFarmField: some View {
+        ZStack(alignment: .topLeading) {
+            ExpansionFarmGrassView(
+                expansion: state.expansionFarm,
+                onDryGroundTap: { row, column in
+                    seedPickerTile = FarmTileCoordinate(row: row, column: column)
+                },
+                onPlotPurchaseTap: { plotNumber in
+                    selectedExpansionPlotNumber = plotNumber
+                }
+            )
+            if let worker = state.farmWorker(for: .expansion) {
+                WalkingCat(
+                    character: worker,
+                    spriteSize: 70.4,
+                    fps: 9,
+                    speed: 34,
+                    farmTask: state.visibleFarmTask(for: .expansion),
+                    harvestRewardImageName: currentHarvestRewardImageName,
+                    onFarmTaskComplete: state.completeFarmWork
+                )
+                .allowsHitTesting(false)
+            }
+            mapNavigation
+            fieldControls
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .topTrailing)
+
+            if let tile = seedPickerTile {
+                seedPicker(for: tile)
+                    .position(seedPickerPosition(for: tile))
+                    .zIndex(2)
+            }
+
+            if let plotNumber = selectedExpansionPlotNumber {
+                Color.black.opacity(0.35)
+                    .contentShape(Rectangle())
+                    .onTapGesture { selectedExpansionPlotNumber = nil }
+                    .zIndex(20)
+                expansionPlotPurchasePopup(plotNumber)
+                    .position(x: 180, y: 270)
+                    .zIndex(21)
             }
         }
         .frame(height: 540)
@@ -663,6 +726,19 @@ struct OverlayView: View {
                 pointerLocation: homePlacementPointer
             )
             .zIndex(0)
+
+            ForEach(state.homeCats) { cat in
+                WalkingCat(
+                    character: cat,
+                    spriteSize: 58,
+                    fps: 9,
+                    speed: 24,
+                    startsAtRandomPosition: true
+                )
+                    .id(cat.id)
+                    .allowsHitTesting(false)
+                    .zIndex(3)
+            }
 
             if !isHomePlacementModeEnabled,
                activeFurniturePlacement == nil {
@@ -724,8 +800,8 @@ struct OverlayView: View {
             }
         )
         .accessibilityLabel(L10n.text(
-            "가구를 선택해 재배치",
-            "Select furniture to reposition"
+            "장난감을 선택해 재배치",
+            "Select a toy to reposition"
         ))
     }
 
@@ -737,7 +813,7 @@ struct OverlayView: View {
                     systemImage: "checkmark",
                     background: fp.primary,
                     action: toggleHomePlacementMode,
-                    accessibilityLabel: L10n.text("가구 배치 모드 완료", "Finish furniture placement mode")
+                    accessibilityLabel: L10n.text("장난감 배치 모드 완료", "Finish toy placement mode")
                 )
 
                 if selectedPlacedFurnitureForReposition != nil {
@@ -746,7 +822,7 @@ struct OverlayView: View {
                         systemImage: "archivebox",
                         background: fp.cell,
                         action: returnSelectedPlacedFurniture,
-                        accessibilityLabel: L10n.text("선택한 가구를 창고로 이동", "Move selected furniture to storage")
+                        accessibilityLabel: L10n.text("선택한 장난감을 창고로 이동", "Move selected toy to storage")
                     )
                 }
             }
@@ -760,7 +836,7 @@ struct OverlayView: View {
                 systemImage: "square.and.pencil",
                 background: fp.panel,
                 action: toggleHomePlacementMode,
-                accessibilityLabel: L10n.text("가구 배치 모드 시작", "Start furniture placement mode")
+                accessibilityLabel: L10n.text("장난감 배치 모드 시작", "Start toy placement mode")
             )
             .position(x: 60, y: 503)
         }
@@ -814,8 +890,8 @@ struct OverlayView: View {
         )
         .onDisappear(perform: clearHomePlacementPointer)
         .accessibilityLabel(L10n.text(
-            "가구 배치 위치",
-            "Furniture placement position"
+            "장난감 배치 위치",
+            "Toy placement position"
         ))
     }
 
@@ -829,14 +905,19 @@ struct OverlayView: View {
 
     private var mapNavigation: some View {
         GeometryReader { geometry in
-            mapDestinationButton(.home, direction: .left)
-                .position(x: 29, y: geometry.size.height / 2)
-            mapDestinationButton(.field, direction: .right)
-                .position(x: geometry.size.width - 29, y: geometry.size.height / 2)
+            if let previous = state.selectedMapLocation.previous {
+                mapDestinationButton(previous, direction: .left)
+                    .position(x: 29, y: geometry.size.height / 2)
+            }
+            if let next = state.selectedMapLocation.next {
+                mapDestinationButton(next, direction: .right)
+                    .position(x: geometry.size.width - 29, y: geometry.size.height / 2)
+            }
 
             HStack(spacing: 3) {
-                navigationIndicator(isCurrent: state.selectedMapLocation == .home)
-                navigationIndicator(isCurrent: state.selectedMapLocation == .field)
+                ForEach(MapLocation.allCases) { location in
+                    navigationIndicator(isCurrent: state.selectedMapLocation == location)
+                }
             }
             .position(x: geometry.size.width / 2, y: geometry.size.height - 14)
             .allowsHitTesting(false)
@@ -954,6 +1035,8 @@ struct OverlayView: View {
             isHomePlacementModeEnabled = false
         } else {
             isHomePlacementModeEnabled = true
+            state.selectedFarmTab = .storage
+            state.selectedStorageCategory = .toys
         }
     }
 
@@ -973,21 +1056,24 @@ struct OverlayView: View {
             isHomePlacementModeEnabled = false
         }
         state.selectedMapLocation = location
+        seedPickerTile = nil
+        isPlantingPriorityPickerPresented = false
+        selectedExpansionPlotNumber = nil
     }
 
     /// 현재 수확 작업의 작물에 맞는 머리 위 보상 이미지.
     private var currentHarvestRewardImageName: String? {
         guard let task = state.farmWorkQueue.first,
               task.kind == .harvesting,
-              state.farmField.isValid(row: task.tile.row, column: task.tile.column)
+              task.area == state.selectedMapLocation.farmArea,
+              let tileState = state.tileState(for: task)
         else { return nil }
-        let tileState = state.farmField.tiles[state.farmField.index(
-            row: task.tile.row,
-            column: task.tile.column
-        )].state
         switch tileState {
         case .matureCarrot: return "carrot_plus"
         case .matureCabbage: return "cabbage_plus"
+        case .matureTomato: return "tomato_plus"
+        case .maturePeach: return "peach_plus"
+        case .matureDurian: return "durian_plus"
         default: return nil
         }
     }
@@ -1075,29 +1161,124 @@ struct OverlayView: View {
     }
 
     private func selectSeed(_ seed: SeedKind, for tile: FarmTileCoordinate) {
-        if state.plant(seed, at: tile) {
+        guard let area = state.selectedMapLocation.farmArea else { return }
+        if state.plant(seed, at: tile, area: area) {
             seedPickerTile = nil
         }
     }
 
-    private var fieldControls: some View {
-        HStack(spacing: 6) {
-            Button(action: onToggleSize) {
-                guiControlIcon("zoom_out", size: 18)
-                    .frame(width: 30, height: 30)
-                    .background(fp.cell)
-                    .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+    private func expansionPlotPurchasePopup(_ plotNumber: Int) -> some View {
+        let price = state.expansionPlotPrice(plotNumber) ?? 0
+        let canPurchase = state.nextExpansionPlotNumber == plotNumber && state.coins >= price
+        return VStack(spacing: 12) {
+            popupHeader(L10n.text("확장 밭 \(plotNumber)번", "Expansion Plot \(plotNumber)")) {
+                selectedExpansionPlotNumber = nil
             }
-            .buttonStyle(.plain)
-
-            Button(action: onOpenSettings) {
-                guiControlIcon("setting", size: 18)
-                    .frame(width: 30, height: 30)
-                    .background(fp.cell)
-                    .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+            Text(L10n.text(
+                "앞 번호의 밭부터 차례대로 구매할 수 있어요.",
+                "Plots must be purchased in order."
+            ))
+            .font(galmuriFont(9))
+            .foregroundColor(fp.inkDim)
+            HStack(spacing: 4) {
+                Circle().fill(rt.yellow).frame(width: 13, height: 13)
+                    .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
+                Text(L10n.number(price))
+                    .font(galmuriFont(15))
+                    .foregroundColor(fp.border)
             }
-            .buttonStyle(.plain)
+            popupActionButton(
+                canPurchase
+                    ? L10n.text("밭 구매", "Buy Plot")
+                    : L10n.text("코인 부족", "Not Enough Coins"),
+                enabled: canPurchase
+            ) {
+                if state.purchaseExpansionPlot(plotNumber) {
+                    selectedExpansionPlotNumber = nil
+                }
+            }
         }
+        .padding(14)
+        .frame(width: 250)
+        .background(fp.panel)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+    }
+
+    private var fieldControls: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            HStack(spacing: 6) {
+                if state.selectedMapLocation.farmArea != nil {
+                    Button {
+                        isPlantingPriorityPickerPresented.toggle()
+                    } label: {
+                        cropImage(
+                            state.preferredPlantingSeed.rawValue,
+                            fallbackColor: seedColor(state.preferredPlantingSeed),
+                            size: 22
+                        )
+                        .frame(width: 30, height: 30)
+                        .background(fp.cell)
+                        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.text(
+                        "우선 파종: \(state.preferredPlantingSeed.shortDisplayName)",
+                        "Plant first: \(state.preferredPlantingSeed.shortDisplayName)"
+                    ))
+                }
+
+                Button(action: onToggleSize) {
+                    guiControlIcon("zoom_out", size: 18)
+                        .frame(width: 30, height: 30)
+                        .background(fp.cell)
+                        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onOpenSettings) {
+                    guiControlIcon("setting", size: 18)
+                        .frame(width: 30, height: 30)
+                        .background(fp.cell)
+                        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+                }
+                .buttonStyle(.plain)
+            }
+
+            if state.selectedMapLocation.farmArea != nil,
+               isPlantingPriorityPickerPresented {
+                plantingPriorityPicker
+            }
+        }
+    }
+
+    private var plantingPriorityPicker: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(L10n.text("먼저 심을 작물", "CROP TO PLANT FIRST"))
+                .font(galmuriFont(9))
+                .foregroundColor(fp.border)
+
+            HStack(spacing: 4) {
+                ForEach(SeedKind.allCases.filter(state.isSeedUnlocked)) { seed in
+                    Button {
+                        state.setPreferredPlantingSeed(seed)
+                        isPlantingPriorityPickerPresented = false
+                    } label: {
+                        cropImage(seed.rawValue, fallbackColor: seedColor(seed), size: 24)
+                            .frame(width: 32, height: 32)
+                            .background(seed == state.preferredPlantingSeed ? fp.primary : fp.cell)
+                            .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 2))
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.text(
+                        "\(seed.shortDisplayName) 우선 파종",
+                        "Plant \(seed.shortDisplayName) first"
+                    ))
+                }
+            }
+        }
+        .padding(5)
+        .background(fp.panel)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
     }
 
     @ViewBuilder
@@ -1168,24 +1349,78 @@ struct OverlayView: View {
                     shopCategoryButton(category)
                 }
             }
+            if state.selectedShopCategory == .seeds {
+                autoSeedPurchaseControls
+            }
             itemGrid {
                 switch state.selectedShopCategory {
                 case .seeds:
-                    shopSeedItem(.carrot)
-                    shopSeedItem(.cabbage)
-                    ForEach(0..<6, id: \.self) { _ in emptySlot }
+                    ForEach(SeedKind.allCases) { seed in
+                        shopSeedItem(seed)
+                    }
+                    ForEach(0..<max(0, 8 - SeedKind.allCases.count), id: \.self) { _ in emptySlot }
                 case .cats:
                     ForEach(shopCats) { cat in
                         shopCatItem(cat)
                     }
                     ForEach(0..<6, id: \.self) { _ in emptySlot }
-                case .furniture:
-                    ForEach(FurnitureCatalog.all) { furniture in
+                case .toys:
+                    ForEach(FurnitureCatalog.toys) { furniture in
                         shopFurnitureItem(furniture)
                     }
                 }
             }
         }
+    }
+
+    private var autoSeedPurchaseControls: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Button(action: state.toggleAutoSeedPurchase) {
+                    HStack(spacing: 5) {
+                        Image(systemName: state.autoSeedPurchaseEnabled ? "checkmark.square.fill" : "square")
+                            .font(.system(size: 11, weight: .bold))
+                        Text(L10n.text("자동 구매", "Auto Buy"))
+                            .font(galmuriFont(10))
+                    }
+                    .foregroundColor(state.autoSeedPurchaseEnabled ? fp.primaryText : fp.border)
+                    .padding(.horizontal, 7)
+                    .frame(height: 28)
+                    .background(state.autoSeedPurchaseEnabled ? fp.primary : fp.cell)
+                    .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 2))
+                }
+                .buttonStyle(.plain)
+                Spacer(minLength: 0)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(SeedKind.allCases.filter { state.isSeedUnlocked($0) }) { seed in
+                        let active = state.autoSeedPurchaseKind == seed
+                        Button(action: { state.setAutoSeedPurchaseKind(seed) }) {
+                            Text(seed.shortDisplayName)
+                                .font(galmuriFont(9))
+                                .foregroundColor(active ? fp.primaryText : fp.border)
+                                .padding(.horizontal, 7)
+                                .frame(height: 28)
+                                .background(active ? fp.primary : fp.cell)
+                                .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 2))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            Text(state.isWaitingForAutoSeedPurchaseFunds
+                ? L10n.text("코인이 부족해 자동 구매를 기다리고 있어요", "Waiting for enough coins to auto-buy")
+                : L10n.text(
+                    "씨앗이 모두 떨어지면 선택한 씨앗을 10개씩 자동으로 구매해요!",
+                    "Automatically buys 10 of the selected seed when all seeds run out!"
+                ))
+                .font(galmuriFont(8))
+                .foregroundColor(state.isWaitingForAutoSeedPurchaseFunds ? fp.carrot : fp.inkDim)
+        }
+        .padding(7)
+        .background(fp.panel)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 2))
     }
 
     private var storageContent: some View {
@@ -1212,13 +1447,13 @@ struct OverlayView: View {
                     }
                     ForEach(0..<max(0, 8 - ownedCrops.count), id: \.self) { _ in emptySlot }
                 }
-            case .furniture:
-                let ownedFurniture = FurnitureCatalog.all.filter { state.furnitureCount($0) > 0 }
+            case .toys:
+                let ownedToys = FurnitureCatalog.toys.filter { state.furnitureCount($0) > 0 }
                 itemGrid {
-                    ForEach(ownedFurniture) { furniture in
-                        storedFurnitureItem(furniture)
+                    ForEach(ownedToys) { toy in
+                        storedFurnitureItem(toy)
                     }
-                    ForEach(0..<max(0, 8 - ownedFurniture.count), id: \.self) { _ in emptySlot }
+                    ForEach(0..<max(0, 8 - ownedToys.count), id: \.self) { _ in emptySlot }
                 }
             }
         }
@@ -1235,14 +1470,20 @@ struct OverlayView: View {
             itemGrid {
                 switch state.selectedCodexCategory {
                 case .crops:
-                    cropEntry(.carrot)
-                    cropEntry(.cabbage)
-                    ForEach(0..<6, id: \.self) { _ in emptySlot }
+                    ForEach(CropKind.allCases) { crop in
+                        cropEntry(crop)
+                    }
+                    ForEach(0..<max(0, 8 - CropKind.allCases.count), id: \.self) { _ in emptySlot }
                 case .cats:
                     ForEach(codexCats) { cat in
                         catEntry(cat)
                     }
                     ForEach(0..<max(0, 8 - codexCats.count), id: \.self) { _ in emptySlot }
+                case .toys:
+                    ForEach(FurnitureCatalog.toys) { toy in
+                        toyEntry(toy)
+                    }
+                    ForEach(0..<max(0, 8 - FurnitureCatalog.toys.count), id: \.self) { _ in emptySlot }
                 }
             }
         }
@@ -1412,9 +1653,10 @@ struct OverlayView: View {
         let active = state.selectedCodexCategory == category
         return Button(action: { state.selectedCodexCategory = category }) {
             Text(category.displayName)
-                .font(galmuriFont(14))
+                .font(galmuriFont(12))
                 .foregroundColor(active ? fp.primaryText : fp.border)
-                .padding(.horizontal, 12).padding(.vertical, 5)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
                 .background(active ? fp.primary : fp.cell)
                 .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
         }
@@ -1425,9 +1667,10 @@ struct OverlayView: View {
         let active = state.selectedShopCategory == category
         return Button(action: { state.selectedShopCategory = category }) {
             Text(category.displayName)
-                .font(galmuriFont(14))
+                .font(galmuriFont(12))
                 .foregroundColor(active ? fp.primaryText : fp.border)
-                .padding(.horizontal, 12).padding(.vertical, 5)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
                 .background(active ? fp.primary : fp.cell)
                 .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
         }
@@ -1455,9 +1698,13 @@ struct OverlayView: View {
     }
 
     private func shopSeedItem(_ seed: SeedKind) -> some View {
-        Button(action: {
-            purchaseQuantity = 1
-            selectedSeedForPurchase = seed
+        let unlocked = state.isSeedUnlocked(seed)
+        return Button(action: {
+            if unlocked {
+                purchaseQuantity = 1
+                seedPurchaseQuantityText = "1"
+                selectedSeedForPurchase = seed
+            }
         }) {
             VStack(spacing: 3) {
                 cropImage(seed.growthImageName, fallbackColor: seedColor(seed), size: 24)
@@ -1466,17 +1713,29 @@ struct OverlayView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                     .multilineTextAlignment(.center)
-                Text(seed.displayedGrowthTime).font(galmuriFont(9)).foregroundColor(fp.inkDim)
-                HStack(spacing: 2) {
-                    Circle().fill(rt.yellow).frame(width: 11, height: 11)
-                        .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
-                    Text("\(seed.purchasePrice)").font(galmuriFont(10)).foregroundColor(fp.border)
+                if unlocked {
+                    Text(seed.displayedGrowthTime).font(galmuriFont(9)).foregroundColor(fp.inkDim)
+                    HStack(spacing: 2) {
+                        Circle().fill(rt.yellow).frame(width: 11, height: 11)
+                            .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
+                        Text("\(seed.purchasePrice)").font(galmuriFont(10)).foregroundColor(fp.border)
+                    }
+                } else {
+                    HStack(spacing: 3) {
+                        Image(systemName: "lock.fill").font(.system(size: 8, weight: .bold))
+                        Text(seed.unlockRequirement ?? "")
+                            .font(galmuriFont(8))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.65)
+                    }
+                    .foregroundColor(fp.inkDim)
                 }
             }
             .padding(.horizontal, 5).padding(.vertical, 4)
-            .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
+            .frame(maxWidth: .infinity, minHeight: 78, maxHeight: 78)
             .background(fp.cell)
             .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+            .opacity(unlocked ? 1 : 0.7)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.text(
@@ -1486,7 +1745,8 @@ struct OverlayView: View {
     }
 
     private func shopCatItem(_ cat: CodexCatEntry) -> some View {
-        Button(action: { selectedCatForPurchase = cat }) {
+        let alreadyOwned = state.isCatUnlocked(id: cat.id)
+        return Button(action: { selectedCatForPurchase = cat }) {
             VStack(spacing: 2) {
                 catProductImage(cat, size: 32)
                 Text(cat.name)
@@ -1494,12 +1754,18 @@ struct OverlayView: View {
                     .foregroundColor(fp.border)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                HStack(spacing: 2) {
-                    Circle().fill(rt.yellow).frame(width: 10, height: 10)
-                        .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
-                    Text(L10n.number(cat.purchasePrice))
-                        .font(galmuriFont(9))
-                        .foregroundColor(fp.border)
+                if alreadyOwned {
+                    Text(L10n.text("보유 중", "Owned"))
+                        .font(galmuriFont(8))
+                        .foregroundColor(fp.inkDim)
+                } else {
+                    HStack(spacing: 2) {
+                        Circle().fill(rt.yellow).frame(width: 10, height: 10)
+                            .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
+                        Text(L10n.number(cat.purchasePrice))
+                            .font(galmuriFont(9))
+                            .foregroundColor(fp.border)
+                    }
                 }
             }
             .padding(.horizontal, 4).padding(.vertical, 4)
@@ -1509,13 +1775,18 @@ struct OverlayView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.text(
-            "\(cat.name), \(L10n.number(cat.purchasePrice))코인에 구매",
-            "Buy \(cat.name) for \(L10n.number(cat.purchasePrice)) coins"
+            alreadyOwned
+                ? "\(cat.name), 보유 중"
+                : "\(cat.name), \(L10n.number(cat.purchasePrice))코인에 구매",
+            alreadyOwned
+                ? "\(cat.name), owned"
+                : "Buy \(cat.name) for \(L10n.number(cat.purchasePrice)) coins"
         ))
     }
 
     private func shopFurnitureItem(_ furniture: FurnitureItem) -> some View {
-        Button(action: {
+        let isOwnedToy = state.ownsFurniture(furniture)
+        return Button(action: {
             purchaseQuantity = 1
             selectedFurnitureForPurchase = furniture
         }) {
@@ -1526,14 +1797,20 @@ struct OverlayView: View {
                     .foregroundColor(fp.border)
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
-                HStack(spacing: 2) {
-                    Circle().fill(rt.yellow).frame(width: 10, height: 10)
-                        .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
-                    Text(L10n.number(furniture.purchasePrice))
+                if isOwnedToy {
+                    Text(L10n.text("보유 중", "Owned"))
                         .font(galmuriFont(8))
-                        .foregroundColor(fp.border)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.65)
+                        .foregroundColor(fp.inkDim)
+                } else {
+                    HStack(spacing: 2) {
+                        Circle().fill(rt.yellow).frame(width: 10, height: 10)
+                            .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
+                        Text(L10n.number(furniture.purchasePrice))
+                            .font(galmuriFont(8))
+                            .foregroundColor(fp.border)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.65)
+                    }
                 }
             }
             .padding(.horizontal, 3)
@@ -1563,7 +1840,7 @@ struct OverlayView: View {
 
     private func seedPurchasePopup(for seed: SeedKind) -> some View {
         let totalPrice = seed.purchasePrice * purchaseQuantity
-        let canPurchase = state.coins >= totalPrice
+        let canPurchase = purchaseQuantity > 0 && state.coins >= totalPrice
         let maxAffordableQuantity = max(1, state.coins / seed.purchasePrice)
         return VStack(spacing: 14) {
             popupHeader(L10n.text("\(seed.displayName) 구매", "Buy \(seed.displayName)")) {
@@ -1578,19 +1855,29 @@ struct OverlayView: View {
                 .foregroundColor(fp.inkDim)
             HStack(spacing: 12) {
                 quantityButton(systemName: "minus", enabled: purchaseQuantity > 1) {
-                    purchaseQuantity -= 1
+                    setSeedPurchaseQuantity(purchaseQuantity - 1)
                 }
-                Text(L10n.count(purchaseQuantity))
+                TextField(
+                    L10n.text("수량", "Quantity"),
+                    text: $seedPurchaseQuantityText
+                )
+                    .textFieldStyle(.plain)
                     .font(galmuriFont(16))
                     .foregroundColor(fp.border)
-                    .frame(minWidth: 58)
+                    .multilineTextAlignment(.center)
+                    .frame(width: 58, height: 28)
+                    .background(fp.cell)
+                    .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 2))
+                    .onChange(of: seedPurchaseQuantityText) { _, newValue in
+                        updateSeedPurchaseQuantity(from: newValue, maximum: maxAffordableQuantity)
+                    }
                 quantityButton(systemName: "plus", enabled: purchaseQuantity < maxAffordableQuantity) {
-                    purchaseQuantity += 1
+                    setSeedPurchaseQuantity(max(1, purchaseQuantity + 1))
                 }
                 quantityMaxButton(
                     enabled: state.coins >= seed.purchasePrice && purchaseQuantity < maxAffordableQuantity
                 ) {
-                    purchaseQuantity = maxAffordableQuantity
+                    setSeedPurchaseQuantity(maxAffordableQuantity)
                 }
             }
             popupActionButton(L10n.text(
@@ -1644,8 +1931,11 @@ struct OverlayView: View {
     }
 
     private func furniturePurchasePopup(for furniture: FurnitureItem) -> some View {
-        let totalPrice = furniture.purchasePrice * purchaseQuantity
-        let canPurchase = state.coins >= totalPrice
+        let singlePurchaseOnly = furniture.maximumPurchaseQuantityPerTransaction == 1
+        let effectiveQuantity = singlePurchaseOnly ? 1 : purchaseQuantity
+        let totalPrice = furniture.purchasePrice * effectiveQuantity
+        let alreadyOwned = furniture.maximumOwnedQuantity != nil && state.ownsFurniture(furniture)
+        let canPurchase = !alreadyOwned && state.coins >= totalPrice
         let maxAffordableQuantity = max(1, state.coins / furniture.purchasePrice)
         return VStack(spacing: 14) {
             popupHeader(L10n.text(
@@ -1656,37 +1946,45 @@ struct OverlayView: View {
             }
             FurnitureAssetImage(furniture: furniture, size: 82)
             Text(L10n.text(
-                "현재 보유 \(state.furnitureCount(furniture))개",
-                "Owned: \(state.furnitureCount(furniture))"
+                "현재 보유 \(state.ownedFurnitureCount(furniture))개",
+                "Owned: \(state.ownedFurnitureCount(furniture))"
             ))
                 .font(galmuriFont(11))
                 .foregroundColor(fp.inkDim)
-            HStack(spacing: 12) {
-                quantityButton(systemName: "minus", enabled: purchaseQuantity > 1) {
-                    purchaseQuantity -= 1
-                }
-                Text(L10n.count(purchaseQuantity))
-                    .font(galmuriFont(16))
-                    .foregroundColor(fp.border)
-                    .frame(minWidth: 58)
-                quantityButton(
-                    systemName: "plus",
-                    enabled: purchaseQuantity < maxAffordableQuantity
-                ) {
-                    purchaseQuantity += 1
-                }
-                quantityMaxButton(
-                    enabled: state.coins >= furniture.purchasePrice
-                        && purchaseQuantity < maxAffordableQuantity
-                ) {
-                    purchaseQuantity = maxAffordableQuantity
+            if let effect = furniture.effect {
+                Text(effect.displayDescription)
+                    .font(galmuriFont(10))
+                    .foregroundColor(fp.primary)
+                    .multilineTextAlignment(.center)
+            }
+            if !singlePurchaseOnly {
+                HStack(spacing: 12) {
+                    quantityButton(systemName: "minus", enabled: purchaseQuantity > 1) {
+                        purchaseQuantity -= 1
+                    }
+                    Text(L10n.count(purchaseQuantity))
+                        .font(galmuriFont(16))
+                        .foregroundColor(fp.border)
+                        .frame(minWidth: 58)
+                    quantityButton(
+                        systemName: "plus",
+                        enabled: purchaseQuantity < maxAffordableQuantity
+                    ) {
+                        purchaseQuantity += 1
+                    }
+                    quantityMaxButton(
+                        enabled: state.coins >= furniture.purchasePrice
+                            && purchaseQuantity < maxAffordableQuantity
+                    ) {
+                        purchaseQuantity = maxAffordableQuantity
+                    }
                 }
             }
             popupActionButton(L10n.text(
-                "\(L10n.number(totalPrice))코인에 구매",
-                "Buy for \(L10n.number(totalPrice)) coins"
+                alreadyOwned ? "보유 중" : "\(L10n.number(totalPrice))코인에 구매",
+                alreadyOwned ? "Owned" : "Buy for \(L10n.number(totalPrice)) coins"
             ), enabled: canPurchase) {
-                if state.purchase(furniture, quantity: purchaseQuantity) {
+                if state.purchase(furniture, quantity: effectiveQuantity) {
                     selectedFurnitureForPurchase = nil
                 }
             }
@@ -1756,10 +2054,83 @@ struct OverlayView: View {
             Text(statusText)
                 .font(galmuriFont(11))
                 .foregroundColor(fp.inkDim)
+            if isUnlocked {
+                HStack(spacing: 6) {
+                    farmAssignmentButton(
+                        catID: cat.id,
+                        area: .main,
+                        title: L10n.text("가운데 농장", "MAIN FARM")
+                    )
+                    farmAssignmentButton(
+                        catID: cat.id,
+                        area: .expansion,
+                        title: L10n.text("오른쪽 농장", "RIGHT FARM")
+                    )
+                }
+                Text(L10n.text(
+                    "다른 농장 담당을 선택하면 두 고양이가 서로 바뀌어요",
+                    "Selecting the other farm's cat swaps both workers"
+                ))
+                    .font(galmuriFont(8))
+                    .foregroundColor(fp.inkDim)
+                    .multilineTextAlignment(.center)
+            }
             popupActionButton(buttonTitle, enabled: isUnlocked && !isSelected) {
                 if state.selectCat(id: cat.id) {
                     selectedCodexCat = nil
                 }
+            }
+        }
+        .padding(16)
+        .frame(width: 270)
+        .background(fp.panel)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        .background(Rectangle().fill(Color.black.opacity(0.3)).offset(x: 5, y: 5))
+    }
+
+    private func farmAssignmentButton(
+        catID: String,
+        area: FarmArea,
+        title: String
+    ) -> some View {
+        let isAssigned = state.farmWorker(for: area)?.id == catID
+        return Button {
+            state.assignFarmWorker(catID: catID, to: area)
+        } label: {
+            Text(isAssigned
+                ? L10n.text("\(title) 담당 중", "ASSIGNED: \(title)")
+                : title)
+                .font(galmuriFont(9))
+                .foregroundColor(isAssigned ? fp.primaryText : fp.border)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity, minHeight: 34)
+                .background(isAssigned ? fp.primary : fp.cell)
+                .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        }
+        .buttonStyle(.plain)
+        .disabled(isAssigned)
+    }
+
+    private func codexToyPopup(for toy: FurnitureItem) -> some View {
+        let ownedCount = state.ownedFurnitureCount(toy)
+        return VStack(spacing: 14) {
+            popupHeader(toy.displayName) { selectedCodexToy = nil }
+            FurnitureAssetImage(furniture: toy, size: 104)
+            if let effect = toy.effect {
+                Text(effect.displayDescription)
+                    .font(galmuriFont(11))
+                    .foregroundColor(fp.primary)
+                    .multilineTextAlignment(.center)
+            }
+            Text(L10n.text(
+                ownedCount > 0 ? "보유 중 · \(ownedCount)개" : "상점에서 구매할 수 있어요",
+                ownedCount > 0 ? "Owned · \(ownedCount)" : "Available from the shop"
+            ))
+                .font(galmuriFont(10))
+                .foregroundColor(fp.inkDim)
+            popupActionButton(L10n.text("확인", "OK"), enabled: true) {
+                selectedCodexToy = nil
             }
         }
         .padding(16)
@@ -1819,7 +2190,7 @@ struct OverlayView: View {
     private func storedCropItem(_ crop: CropKind) -> some View {
         Button(action: { openSalePopup(for: crop) }) {
             VStack(spacing: 4) {
-                cropImage(crop.imageName, fallbackColor: crop == .carrot ? fp.carrot : fp.cabbage, size: 28)
+                cropImage(crop.imageName, fallbackColor: cropColor(crop), size: 28)
                 Text(crop.displayName)
                     .font(galmuriFont(9)).foregroundColor(fp.border)
                 Text(L10n.text(
@@ -1890,7 +2261,7 @@ struct OverlayView: View {
 
     private func salePopup(for crop: CropKind) -> some View {
         let ownedCount = state.cropCount(crop)
-        let totalPrice = crop.salePrice * saleQuantity
+        let totalPrice = state.saleProceeds(for: crop, quantity: saleQuantity) ?? 0
         return VStack(spacing: 14) {
             HStack {
                 Text(L10n.text("\(crop.displayName) 판매", "Sell \(crop.displayName)"))
@@ -1906,7 +2277,7 @@ struct OverlayView: View {
                 .buttonStyle(.plain)
             }
 
-            cropImage(crop.imageName, fallbackColor: crop == .carrot ? fp.carrot : fp.cabbage, size: 48)
+            cropImage(crop.imageName, fallbackColor: cropColor(crop), size: 48)
 
             Text(L10n.text("보유 수량 \(ownedCount)개", "Owned: \(ownedCount)"))
                 .font(galmuriFont(11))
@@ -1968,6 +2339,28 @@ struct OverlayView: View {
         .disabled(!enabled)
     }
 
+    private func setSeedPurchaseQuantity(_ quantity: Int) {
+        purchaseQuantity = max(0, quantity)
+        seedPurchaseQuantityText = quantity > 0 ? String(quantity) : ""
+    }
+
+    private func updateSeedPurchaseQuantity(from input: String, maximum: Int) {
+        let digits = input.filter(\.isNumber)
+        guard !digits.isEmpty else {
+            purchaseQuantity = 0
+            if input != digits { seedPurchaseQuantityText = digits }
+            return
+        }
+
+        let parsed = Int(digits) ?? maximum
+        let clamped = min(max(parsed, 1), maximum)
+        purchaseQuantity = clamped
+        let normalized = String(clamped)
+        if seedPurchaseQuantityText != normalized {
+            seedPurchaseQuantityText = normalized
+        }
+    }
+
     private func quantityMaxButton(enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text("MAX")
@@ -1985,12 +2378,25 @@ struct OverlayView: View {
         switch seed {
         case .carrot: return fp.carrot
         case .cabbage: return fp.cabbage
+        case .tomato: return fp.tomato
+        case .peach: return fp.peach
+        case .durian: return fp.durian
+        }
+    }
+
+    private func cropColor(_ crop: CropKind) -> Color {
+        switch crop {
+        case .carrot: return fp.carrot
+        case .cabbage: return fp.cabbage
+        case .tomato: return fp.tomato
+        case .peach: return fp.peach
+        case .durian: return fp.durian
         }
     }
 
     private func cropEntry(_ crop: CropKind) -> some View {
         VStack(spacing: 4) {
-            cropImage(crop.imageName, fallbackColor: crop == .carrot ? fp.carrot : fp.cabbage)
+            cropImage(crop.imageName, fallbackColor: cropColor(crop))
             Text(crop.displayName)
                 .font(galmuriFont(10))
                 .foregroundColor(fp.border)
@@ -2032,6 +2438,32 @@ struct OverlayView: View {
         .accessibilityLabel(L10n.text(
             "\(cat.name) 고양이 상세 보기",
             "View details for \(cat.name)"
+        ))
+    }
+
+    private func toyEntry(_ toy: FurnitureItem) -> some View {
+        Button(action: { selectedCodexToy = toy }) {
+            VStack(spacing: 4) {
+                FurnitureAssetImage(furniture: toy, size: 38)
+                Text(toy.displayName)
+                    .font(galmuriFont(8))
+                    .foregroundColor(fp.border)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                Text(state.ownsFurniture(toy) ? L10n.text("보유", "Owned") : "???")
+                    .font(galmuriFont(8))
+                    .foregroundColor(fp.inkDim)
+            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
+            .background(fp.cell)
+            .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.text(
+            "\(toy.displayName) 장난감 상세 보기",
+            "View details for \(toy.displayName)"
         ))
     }
 
