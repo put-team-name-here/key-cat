@@ -15,6 +15,9 @@ let package = Package(
                 .copy("Resources/grounds"),
                 .copy("Resources/gui"),
                 .copy("Resources/fabrics"),
+                .copy("Resources/furniture"),
+                .copy("Resources/home"),
+                .copy("Resources/navigation"),
             ]
         ),
         .testTarget(

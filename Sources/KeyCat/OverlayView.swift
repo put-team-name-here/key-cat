@@ -160,6 +160,12 @@ struct OverlayView: View {
     @State private var saleQuantity = 1
     @State private var selectedSeedForPurchase: SeedKind?
     @State private var selectedCatForPurchase: CodexCatEntry?
+    @State private var selectedFurnitureForPurchase: FurnitureItem?
+    @State private var selectedFurnitureForPlacement: FurnitureItem?
+    @State private var selectedPlacedFurnitureForReposition: PlacedFurniture?
+    @State private var isHomePlacementModeEnabled = false
+    @State private var hoveredHomeTile: FarmTileCoordinate?
+    @State private var homePlacementPointer: CGPoint?
     @State private var selectedCodexCat: CodexCatEntry?
     @State private var selectedTypingDate: Date?
     @State private var purchaseQuantity = 1
@@ -538,11 +544,10 @@ struct OverlayView: View {
     }
 
     // MARK: - 확장 화면 (농장 콘솔, 시안 농장앱화면.dc.html)
-    // 정적 구성: 씨앗/탭 콘텐츠는 자리표시일 뿐 실제 상점·창고 기능은 아직 없음.
 
     private var expandedView: some View {
         VStack(spacing: 0) {
-            farmField
+            mapView
             resourceBar
             inventorySection
             tabBar
@@ -577,6 +582,13 @@ struct OverlayView: View {
                         .onTapGesture { selectedCatForPurchase = nil }
                     catPurchasePopup(for: cat)
                 }
+            } else if let furniture = selectedFurnitureForPurchase {
+                ZStack {
+                    Color.black.opacity(0.35)
+                        .contentShape(Rectangle())
+                        .onTapGesture { selectedFurnitureForPurchase = nil }
+                    furniturePurchasePopup(for: furniture)
+                }
             } else if let cat = selectedCodexCat {
                 ZStack {
                     Color.black.opacity(0.35)
@@ -597,6 +609,17 @@ struct OverlayView: View {
         .fixedSize()
     }
 
+    private var mapView: some View {
+        Group {
+            switch state.selectedMapLocation {
+            case .field:
+                farmField
+            case .home:
+                homeField
+            }
+        }
+    }
+
     // MARK: 밭 필드 - 잔디 배경 + 우상단 축소/설정 버튼
 
     private var farmField: some View {
@@ -615,6 +638,7 @@ struct OverlayView: View {
                 onFarmTaskComplete: state.completeFarmWork
             )
                 .allowsHitTesting(false)
+            mapNavigation
             fieldControls
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .topTrailing)
@@ -627,6 +651,328 @@ struct OverlayView: View {
         }
         .frame(height: 540)
         .clipped()
+    }
+
+    private var homeField: some View {
+        ZStack(alignment: .topLeading) {
+            HomeRoomView(
+                home: state.home,
+                selectedFurniture: selectedFurnitureForPlacement,
+                selectedPlacedFurniture: selectedPlacedFurnitureForReposition,
+                hoveredTile: hoveredHomeTile,
+                pointerLocation: homePlacementPointer
+            )
+            .zIndex(0)
+
+            if !isHomePlacementModeEnabled,
+               activeFurniturePlacement == nil {
+                homePlacementLockedSurface
+                    .zIndex(4)
+            }
+
+            if isHomePlacementModeEnabled,
+               selectedFurnitureForPlacement == nil,
+               selectedPlacedFurnitureForReposition == nil {
+                homeFurnitureInteractionLayer
+                    .zIndex(5)
+            }
+
+            if activeFurniturePlacement != nil {
+                homePlacementSurface
+                    .zIndex(6)
+            }
+
+            mapNavigation
+                .zIndex(10)
+
+            homePlacementModeButton
+                .zIndex(11)
+
+            fieldControls
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .topTrailing)
+                .zIndex(20)
+
+            if let furniture = selectedFurnitureForPlacement {
+                furniturePlacementHint(furniture, isRepositioning: false)
+                    .position(x: 180, y: 28)
+                    .zIndex(21)
+            } else if let placedFurniture = selectedPlacedFurnitureForReposition,
+                      let furniture = FurnitureCatalog.item(withID: placedFurniture.furnitureID) {
+                furniturePlacementHint(furniture, isRepositioning: true)
+                    .position(x: 180, y: 28)
+                    .zIndex(21)
+            }
+        }
+        .frame(height: 540)
+        .clipped()
+    }
+
+    /// 배치 모드에서만 가구의 실제 표시 영역을 선택 대상으로 사용한다.
+    private var homeFurnitureInteractionLayer: some View {
+        HomePointerTrackingView(
+            onPointerMove: updateHomePlacementPointer,
+            onPointerExit: clearHomePlacementPointer,
+            onTap: { point in
+                updateHomePlacementPointer(point)
+                guard let placedFurniture = HomeRoomView.placedFurniture(
+                    in: state.home,
+                    at: point
+                )
+                else { return }
+                selectPlacedFurnitureForReposition(placedFurniture)
+            }
+        )
+        .accessibilityLabel(L10n.text(
+            "가구를 선택해 재배치",
+            "Select furniture to reposition"
+        ))
+    }
+
+    @ViewBuilder private var homePlacementModeButton: some View {
+        if isHomePlacementModeEnabled {
+            HStack(spacing: 6) {
+                homePlacementControl(
+                    title: L10n.text("완료", "Done"),
+                    systemImage: "checkmark",
+                    background: fp.primary,
+                    action: toggleHomePlacementMode,
+                    accessibilityLabel: L10n.text("가구 배치 모드 완료", "Finish furniture placement mode")
+                )
+
+                if selectedPlacedFurnitureForReposition != nil {
+                    homePlacementControl(
+                        title: L10n.text("창고로", "To Storage"),
+                        systemImage: "archivebox",
+                        background: fp.cell,
+                        action: returnSelectedPlacedFurniture,
+                        accessibilityLabel: L10n.text("선택한 가구를 창고로 이동", "Move selected furniture to storage")
+                    )
+                }
+            }
+            .position(
+                x: selectedPlacedFurnitureForReposition == nil ? 60 : 112,
+                y: 503
+            )
+        } else {
+            homePlacementControl(
+                title: L10n.text("배치 모드", "Placement"),
+                systemImage: "square.and.pencil",
+                background: fp.panel,
+                action: toggleHomePlacementMode,
+                accessibilityLabel: L10n.text("가구 배치 모드 시작", "Start furniture placement mode")
+            )
+            .position(x: 60, y: 503)
+        }
+    }
+
+    /// 배치 중인 주요 조작은 함께 보이며, 기존 완료 버튼보다 1.5배 높은 33pt를 유지한다.
+    private func homePlacementControl(
+        title: String,
+        systemImage: String,
+        background: Color,
+        action: @escaping () -> Void,
+        accessibilityLabel: String
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 10, weight: .bold))
+                Text(title)
+                    .font(galmuriFont(10))
+            }
+            .foregroundColor(fp.border)
+            .frame(width: 92, height: 33)
+            .background(background)
+            .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 2))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    /// 일반 집 화면에서는 바닥을 클릭해도 가구 편집으로 이어지지 않게 막는다.
+    /// 내비게이션과 배치 모드 버튼은 더 높은 레이어에서 계속 동작한다.
+    private var homePlacementLockedSurface: some View {
+        HomePointerTrackingView(
+            onPointerMove: { _ in },
+            onPointerExit: {},
+            onTap: { _ in }
+        )
+        .accessibilityHidden(true)
+    }
+
+    /// 칸 전체 격자 대신 포인터가 머무는 바닥과 흰색 가구 실루엣만 보여 주는 배치 입력면.
+    private var homePlacementSurface: some View {
+        HomePointerTrackingView(
+            onPointerMove: updateHomePlacementPointer,
+            onPointerExit: clearHomePlacementPointer,
+            onTap: { point in
+                updateHomePlacementPointer(point)
+                guard let tile = HomeRoomView.tile(at: point) else { return }
+                placeSelectedFurniture(at: tile)
+            }
+        )
+        .onDisappear(perform: clearHomePlacementPointer)
+        .accessibilityLabel(L10n.text(
+            "가구 배치 위치",
+            "Furniture placement position"
+        ))
+    }
+
+    private var activeFurniturePlacement: FurnitureItem? {
+        if let selectedFurnitureForPlacement {
+            return selectedFurnitureForPlacement
+        }
+        guard let placedFurniture = selectedPlacedFurnitureForReposition else { return nil }
+        return FurnitureCatalog.item(withID: placedFurniture.furnitureID)
+    }
+
+    private var mapNavigation: some View {
+        GeometryReader { geometry in
+            mapDestinationButton(.home, direction: .left)
+                .position(x: 29, y: geometry.size.height / 2)
+            mapDestinationButton(.field, direction: .right)
+                .position(x: geometry.size.width - 29, y: geometry.size.height / 2)
+
+            HStack(spacing: 3) {
+                navigationIndicator(isCurrent: state.selectedMapLocation == .home)
+                navigationIndicator(isCurrent: state.selectedMapLocation == .field)
+            }
+            .position(x: geometry.size.width / 2, y: geometry.size.height - 14)
+            .allowsHitTesting(false)
+        }
+    }
+
+    private func mapDestinationButton(
+        _ location: MapLocation,
+        direction: NavigationDirection
+    ) -> some View {
+        Button(action: { navigate(to: location) }) {
+            if let image = NavigationAssetCache.image(location.navigationIconResource) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.none)
+                    .scaledToFit()
+                    .frame(width: 22, height: 22)
+            } else {
+                Image(systemName: location == .field ? "leaf.fill" : "house.fill")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(fp.border)
+                    .frame(width: 22, height: 22)
+            }
+        }
+        .buttonStyle(NavigationAssetButtonStyle(direction: direction))
+        .disabled(state.selectedMapLocation == location)
+        .accessibilityLabel(L10n.text(
+            "\(location.displayName)(으)로 이동",
+            "Go to \(location.displayName)"
+        ))
+    }
+
+    private func navigationIndicator(isCurrent: Bool) -> some View {
+        // 제공된 스프라이트는 이름과 달리 밝은 점이 indicator_inactive다.
+        // 현재 위치를 흰색으로 보여 주기 위해 밝은 점을 현재 페이지에 쓴다.
+        let resource = isCurrent ? "indicator_inactive" : "indicator_active"
+        return Group {
+            if let image = NavigationAssetCache.image(resource) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.none)
+                    .scaledToFit()
+            } else {
+                Circle()
+                    .fill(isCurrent ? fp.cell : fp.primary)
+                    .overlay(Circle().strokeBorder(fp.border, lineWidth: 1.5))
+            }
+        }
+        .frame(width: 12, height: 12)
+        .accessibilityHidden(true)
+    }
+
+    private func furniturePlacementHint(
+        _ furniture: FurnitureItem,
+        isRepositioning: Bool
+    ) -> some View {
+        HStack(spacing: 5) {
+            FurnitureAssetImage(furniture: furniture, size: 25)
+            Text(L10n.text(
+                isRepositioning
+                    ? "마우스로 \(furniture.displayName) 위치를 정하세요"
+                    : "마우스로 \(furniture.displayName) 놓을 위치를 정하세요",
+                isRepositioning
+                    ? "Move the mouse to position \(furniture.displayName)"
+                    : "Move the mouse to place \(furniture.displayName)"
+            ))
+                .font(galmuriFont(9))
+                .foregroundColor(fp.border)
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(fp.panel)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 2))
+    }
+
+    private func placeSelectedFurniture(at tile: FarmTileCoordinate) {
+        if let furniture = selectedFurnitureForPlacement {
+            if state.placeFurniture(furniture, at: tile) {
+                selectedFurnitureForPlacement = nil
+                clearHomePlacementPointer()
+            }
+        } else if let placedFurniture = selectedPlacedFurnitureForReposition,
+                  state.moveFurniture(placedFurniture, to: tile) {
+            selectedPlacedFurnitureForReposition = nil
+            clearHomePlacementPointer()
+        }
+    }
+
+    private func selectPlacedFurnitureForReposition(_ placedFurniture: PlacedFurniture) {
+        guard isHomePlacementModeEnabled,
+              FurnitureCatalog.item(withID: placedFurniture.furnitureID) != nil
+        else { return }
+        selectedFurnitureForPlacement = nil
+        selectedPlacedFurnitureForReposition = placedFurniture
+        state.selectedMapLocation = .home
+    }
+
+    private func returnSelectedPlacedFurniture() {
+        guard let placedFurniture = selectedPlacedFurnitureForReposition else { return }
+        if state.returnFurnitureToStorage(placedFurniture) {
+            selectedPlacedFurnitureForReposition = nil
+            clearHomePlacementPointer()
+        }
+    }
+
+    private func cancelFurniturePlacement() {
+        selectedFurnitureForPlacement = nil
+        selectedPlacedFurnitureForReposition = nil
+        clearHomePlacementPointer()
+    }
+
+    private func toggleHomePlacementMode() {
+        if isHomePlacementModeEnabled {
+            cancelFurniturePlacement()
+            isHomePlacementModeEnabled = false
+        } else {
+            isHomePlacementModeEnabled = true
+        }
+    }
+
+    private func clearHomePlacementPointer() {
+        hoveredHomeTile = nil
+        homePlacementPointer = nil
+    }
+
+    private func updateHomePlacementPointer(_ point: CGPoint) {
+        homePlacementPointer = point
+        hoveredHomeTile = HomeRoomView.tile(at: point)
+    }
+
+    private func navigate(to location: MapLocation) {
+        if location != .home {
+            cancelFurniturePlacement()
+            isHomePlacementModeEnabled = false
+        }
+        state.selectedMapLocation = location
     }
 
     /// 현재 수확 작업의 작물에 맞는 머리 위 보상 이미지.
@@ -833,22 +1179,48 @@ struct OverlayView: View {
                         shopCatItem(cat)
                     }
                     ForEach(0..<6, id: \.self) { _ in emptySlot }
+                case .furniture:
+                    ForEach(FurnitureCatalog.all) { furniture in
+                        shopFurnitureItem(furniture)
+                    }
                 }
             }
         }
     }
 
     private var storageContent: some View {
-        let ownedCrops = CropKind.allCases.filter { state.cropCount($0) > 0 }
-        let occupiedCount = SeedKind.allCases.count + ownedCrops.count
-        return itemGrid {
-            ForEach(SeedKind.allCases) { seed in
-                storedSeedItem(seed)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                ForEach(StorageCategory.allCases) { category in
+                    storageCategoryButton(category)
+                }
             }
-            ForEach(ownedCrops) { crop in
-                storedCropItem(crop)
+
+            switch state.selectedStorageCategory {
+            case .seeds:
+                itemGrid {
+                    ForEach(SeedKind.allCases) { seed in
+                        storedSeedItem(seed)
+                    }
+                    ForEach(0..<max(0, 8 - SeedKind.allCases.count), id: \.self) { _ in emptySlot }
+                }
+            case .crops:
+                let ownedCrops = CropKind.allCases.filter { state.cropCount($0) > 0 }
+                itemGrid {
+                    ForEach(ownedCrops) { crop in
+                        storedCropItem(crop)
+                    }
+                    ForEach(0..<max(0, 8 - ownedCrops.count), id: \.self) { _ in emptySlot }
+                }
+            case .furniture:
+                let ownedFurniture = FurnitureCatalog.all.filter { state.furnitureCount($0) > 0 }
+                itemGrid {
+                    ForEach(ownedFurniture) { furniture in
+                        storedFurnitureItem(furniture)
+                    }
+                    ForEach(0..<max(0, 8 - ownedFurniture.count), id: \.self) { _ in emptySlot }
+                }
             }
-            ForEach(0..<max(0, 8 - occupiedCount), id: \.self) { _ in emptySlot }
         }
     }
 
@@ -1062,6 +1434,20 @@ struct OverlayView: View {
         .buttonStyle(.plain)
     }
 
+    private func storageCategoryButton(_ category: StorageCategory) -> some View {
+        let active = state.selectedStorageCategory == category
+        return Button(action: { state.selectedStorageCategory = category }) {
+            Text(category.displayName)
+                .font(galmuriFont(12))
+                .foregroundColor(active ? fp.primaryText : fp.border)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(active ? fp.primary : fp.cell)
+                .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        }
+        .buttonStyle(.plain)
+    }
+
     private func itemGrid<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
             content()
@@ -1125,6 +1511,41 @@ struct OverlayView: View {
         .accessibilityLabel(L10n.text(
             "\(cat.name), \(L10n.number(cat.purchasePrice))코인에 구매",
             "Buy \(cat.name) for \(L10n.number(cat.purchasePrice)) coins"
+        ))
+    }
+
+    private func shopFurnitureItem(_ furniture: FurnitureItem) -> some View {
+        Button(action: {
+            purchaseQuantity = 1
+            selectedFurnitureForPurchase = furniture
+        }) {
+            VStack(spacing: 2) {
+                FurnitureAssetImage(furniture: furniture, size: 34)
+                Text(furniture.displayName)
+                    .font(galmuriFont(8))
+                    .foregroundColor(fp.border)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                HStack(spacing: 2) {
+                    Circle().fill(rt.yellow).frame(width: 10, height: 10)
+                        .overlay(Circle().strokeBorder(fp.border, lineWidth: 2))
+                    Text(L10n.number(furniture.purchasePrice))
+                        .font(galmuriFont(8))
+                        .foregroundColor(fp.border)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+                }
+            }
+            .padding(.horizontal, 3)
+            .padding(.vertical, 3)
+            .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
+            .background(fp.cell)
+            .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.text(
+            "\(furniture.displayName) 구매 수량 선택",
+            "Choose quantity of \(furniture.displayName) to buy"
         ))
     }
 
@@ -1212,6 +1633,61 @@ struct OverlayView: View {
             ) {
                 if state.purchaseCat(id: cat.id, unitPrice: cat.purchasePrice) {
                     selectedCatForPurchase = nil
+                }
+            }
+        }
+        .padding(16)
+        .frame(width: 250)
+        .background(fp.panel)
+        .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        .background(Rectangle().fill(Color.black.opacity(0.3)).offset(x: 5, y: 5))
+    }
+
+    private func furniturePurchasePopup(for furniture: FurnitureItem) -> some View {
+        let totalPrice = furniture.purchasePrice * purchaseQuantity
+        let canPurchase = state.coins >= totalPrice
+        let maxAffordableQuantity = max(1, state.coins / furniture.purchasePrice)
+        return VStack(spacing: 14) {
+            popupHeader(L10n.text(
+                "\(furniture.displayName) 구매",
+                "Buy \(furniture.displayName)"
+            )) {
+                selectedFurnitureForPurchase = nil
+            }
+            FurnitureAssetImage(furniture: furniture, size: 82)
+            Text(L10n.text(
+                "현재 보유 \(state.furnitureCount(furniture))개",
+                "Owned: \(state.furnitureCount(furniture))"
+            ))
+                .font(galmuriFont(11))
+                .foregroundColor(fp.inkDim)
+            HStack(spacing: 12) {
+                quantityButton(systemName: "minus", enabled: purchaseQuantity > 1) {
+                    purchaseQuantity -= 1
+                }
+                Text(L10n.count(purchaseQuantity))
+                    .font(galmuriFont(16))
+                    .foregroundColor(fp.border)
+                    .frame(minWidth: 58)
+                quantityButton(
+                    systemName: "plus",
+                    enabled: purchaseQuantity < maxAffordableQuantity
+                ) {
+                    purchaseQuantity += 1
+                }
+                quantityMaxButton(
+                    enabled: state.coins >= furniture.purchasePrice
+                        && purchaseQuantity < maxAffordableQuantity
+                ) {
+                    purchaseQuantity = maxAffordableQuantity
+                }
+            }
+            popupActionButton(L10n.text(
+                "\(L10n.number(totalPrice))코인에 구매",
+                "Buy for \(L10n.number(totalPrice)) coins"
+            ), enabled: canPurchase) {
+                if state.purchase(furniture, quantity: purchaseQuantity) {
+                    selectedFurnitureForPurchase = nil
                 }
             }
         }
@@ -1364,6 +1840,47 @@ struct OverlayView: View {
             "\(crop.displayName) 판매 수량 선택",
             "Choose quantity of \(crop.displayName) to sell"
         ))
+    }
+
+    private func storedFurnitureItem(_ furniture: FurnitureItem) -> some View {
+        Button(action: { selectFurnitureForPlacement(furniture) }) {
+            VStack(spacing: 4) {
+                FurnitureAssetImage(furniture: furniture, size: 30)
+                Text(furniture.displayName)
+                    .font(galmuriFont(8))
+                    .foregroundColor(fp.border)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                    .multilineTextAlignment(.center)
+                Text(L10n.text(
+                    "\(state.furnitureCount(furniture))개 · 집에 놓기",
+                    "\(state.furnitureCount(furniture)) · Place"
+                ))
+                    .font(galmuriFont(8))
+                    .foregroundColor(fp.inkDim)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+            }
+            .padding(.horizontal, 3)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, minHeight: 74, maxHeight: 74)
+            .background(fp.cell)
+            .overlay(Rectangle().strokeBorder(fp.border, lineWidth: 3))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.text(
+            "\(furniture.displayName) 집에 배치",
+            "Place \(furniture.displayName) in the home"
+        ))
+    }
+
+    private func selectFurnitureForPlacement(_ furniture: FurnitureItem) {
+        guard state.furnitureCount(furniture) > 0 else { return }
+        selectedPlacedFurnitureForReposition = nil
+        selectedFurnitureForPlacement = furniture
+        isHomePlacementModeEnabled = true
+        clearHomePlacementPointer()
+        state.selectedMapLocation = .home
     }
 
     private func openSalePopup(for crop: CropKind) {
