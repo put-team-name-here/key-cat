@@ -74,12 +74,16 @@ final class BalanceTests: XCTestCase {
         XCTAssertEqual(catPurchasePrice("british_shorthair"), 250_000)
     }
 
-    func testCalicoDropsFromCabbageAtConfiguredRate() {
+    func testRareHarvestCatsUseConfiguredDropRate() {
         let calicoRate = catHarvestDropRates(for: .cabbage)
             .first(where: { $0.catID == "calico" })?
             .probability
+        let oddeyeRate = catHarvestDropRates(for: .carrot)
+            .first(where: { $0.catID == "oddeye" })?
+            .probability
 
-        XCTAssertEqual(calicoRate, 0.000001)
+        XCTAssertEqual(calicoRate, 0.00001)
+        XCTAssertEqual(oddeyeRate, 0.00001)
     }
 
     func testNewCatCatalogEntriesHaveAllRequiredResources() {
@@ -110,7 +114,7 @@ final class BalanceTests: XCTestCase {
     }
 
     func testCatalogContainsOnlyProvidedToyAssets() {
-        XCTAssertEqual(FurnitureCatalog.all.count, 5)
+        XCTAssertEqual(FurnitureCatalog.all.count, 7)
         XCTAssertEqual(FurnitureCatalog.all, FurnitureCatalog.toys)
         XCTAssertFalse(FurnitureCatalog.all.contains { $0.id.hasPrefix("antique_") })
         XCTAssertFalse(FurnitureCatalog.all.contains { $0.id.hasPrefix("farm_") })
@@ -138,8 +142,10 @@ final class BalanceTests: XCTestCase {
             "01_yarn_ball_256": (150_000, .growthSpeedBonus(percent: 5)),
             "02_feather_wand_256": (225_000, .cropSaleBonus(percent: 10)),
             "03_plush_fish_256": (100_000, .cropSaleBonus(percent: 5)),
-            "04_toy_mouse_256": (75_000, .typingBonusPerHundred(coins: 1)),
-            "05_coil_spring_256": (175_000, .typingBonusPerHundred(coins: 2)),
+            "04_toy_mouse_256": (75_000, .typingBonusPerHundred(coins: 100)),
+            "05_coil_spring_256": (175_000, .typingBonusPerHundred(coins: 200)),
+            "03_cat_bed_256": (250_000, .growthSpeedBonus(percent: 10)),
+            "cat_tower_pixelart_256": (250_000, .typingBonusPerHundred(coins: 300)),
         ]
 
         XCTAssertEqual(Set(FurnitureCatalog.toys.map(\.id)), Set(expected.keys))
@@ -150,7 +156,7 @@ final class BalanceTests: XCTestCase {
             XCTAssertEqual(toy.maximumOwnedQuantity, 1)
         }
         XCTAssertEqual(FurnitureCatalog.toys.map(\.displayNameKorean), [
-            "실뭉치", "낚시대", "인형", "쥐 인형", "스프링"
+            "실뭉치", "낚시대", "인형", "쥐 인형", "스프링", "쿠션", "캣타워"
         ])
 
         let toy = FurnitureCatalog.toys[0]
@@ -165,6 +171,8 @@ final class BalanceTests: XCTestCase {
         let fish = FurnitureCatalog.item(withID: "03_plush_fish_256")!
         let mouse = FurnitureCatalog.item(withID: "04_toy_mouse_256")!
         let spring = FurnitureCatalog.item(withID: "05_coil_spring_256")!
+        let bed = FurnitureCatalog.item(withID: "03_cat_bed_256")!
+        let tower = FurnitureCatalog.item(withID: "cat_tower_pixelart_256")!
         var home = HomeData()
         home.placedFurniture = [
             PlacedFurniture(furnitureID: yarn.id, row: 0, column: 0),
@@ -173,12 +181,14 @@ final class BalanceTests: XCTestCase {
             PlacedFurniture(furnitureID: mouse.id, row: 0, column: 4),
             PlacedFurniture(furnitureID: spring.id, row: 0, column: 5),
             PlacedFurniture(furnitureID: "unknown-legacy-item", row: 0, column: 6),
+            PlacedFurniture(furnitureID: bed.id, row: 1, column: 0),
+            PlacedFurniture(furnitureID: tower.id, row: 1, column: 1),
         ]
 
         XCTAssertEqual(home.activeBonuses, HomeBonusSummary(
             cropSaleBonusPercent: 15,
-            growthSpeedBonusPercent: 5,
-            typingBonusPerHundred: 3
+            growthSpeedBonusPercent: 15,
+            typingBonusPerHundred: 600
         ))
     }
 
@@ -224,12 +234,20 @@ final class BalanceTests: XCTestCase {
         }
     }
 
-    func testExpansionPlotsUseFixedSequentialPricing() {
+    func testExpansionPlotsUseIncreasingSequentialPricing() {
         XCTAssertEqual(ExpansionPlotPricing.prices.count, 16)
-        XCTAssertTrue(ExpansionPlotPricing.prices.allSatisfy { $0 == 500_000 })
-        XCTAssertEqual(ExpansionPlotPricing.price(for: 1), 500_000)
-        XCTAssertEqual(ExpansionPlotPricing.price(for: 16), 500_000)
-        XCTAssertEqual(ExpansionPlotPricing.prices.reduce(0, +), 8_000_000)
+        XCTAssertEqual(
+            ExpansionPlotPricing.prices,
+            [
+                10_000, 15_000, 25_000, 35_000,
+                45_000, 65_000, 85_000, 115_000,
+                150_000, 190_000, 235_000, 285_000,
+                340_000, 405_000, 480_000, 530_000
+            ]
+        )
+        XCTAssertEqual(ExpansionPlotPricing.price(for: 1), 10_000)
+        XCTAssertEqual(ExpansionPlotPricing.price(for: 16), 530_000)
+        XCTAssertEqual(ExpansionPlotPricing.prices.reduce(0, +), 3_010_000)
         XCTAssertNil(ExpansionPlotPricing.price(for: 0))
         XCTAssertNil(ExpansionPlotPricing.price(for: 17))
 

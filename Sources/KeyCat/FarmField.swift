@@ -267,7 +267,24 @@ struct FarmFieldData: Codable {
 }
 
 enum ExpansionPlotPricing {
-    static let prices = Array(repeating: 500_000, count: 16)
+    static let prices = [
+        10_000,
+        15_000,
+        25_000,
+        35_000,
+        45_000,
+        65_000,
+        85_000,
+        115_000,
+        150_000,
+        190_000,
+        235_000,
+        285_000,
+        340_000,
+        405_000,
+        480_000,
+        530_000
+    ]
 
     static func price(for plotNumber: Int) -> Int? {
         guard prices.indices.contains(plotNumber - 1) else { return nil }

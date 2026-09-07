@@ -243,9 +243,9 @@ enum CatUnlockSource {
 func catHarvestDropRates(for crop: CropKind) -> [(catID: String, probability: Double)] {
     switch crop {
     case .carrot:
-        return [("cheese", 0.001), ("oddeye", 0.000001)]
+        return [("cheese", 0.001), ("oddeye", 0.00001)]
     case .cabbage:
-        return [("gray", 0.001), ("calico", 0.000001)]
+        return [("gray", 0.001), ("calico", 0.00001)]
     case .tomato, .peach, .durian:
         return []
     }

@@ -145,7 +145,7 @@ struct FurnitureItem: Identifiable, Hashable {
     var renderSize: CGFloat { 72 }
 }
 
-/// 배치 효과가 있는 장난감 5종만 상품 목록으로 연결한다.
+/// 배치 효과가 있는 장난감 7종만 상품 목록으로 연결한다.
 enum FurnitureCatalog {
     static let toys: [FurnitureItem] = [
         FurnitureItem(
@@ -178,7 +178,7 @@ enum FurnitureCatalog {
             displayNameKorean: "쥐 인형",
             displayNameEnglish: "Toy Mouse",
             purchasePrice: 75_000,
-            effect: .typingBonusPerHundred(coins: 1)
+            effect: .typingBonusPerHundred(coins: 100)
         ),
         FurnitureItem(
             id: "05_coil_spring_256",
@@ -186,7 +186,23 @@ enum FurnitureCatalog {
             displayNameKorean: "스프링",
             displayNameEnglish: "Coil Spring",
             purchasePrice: 175_000,
-            effect: .typingBonusPerHundred(coins: 2)
+            effect: .typingBonusPerHundred(coins: 200)
+        ),
+        FurnitureItem(
+            id: "03_cat_bed_256",
+            resourceName: "03_cat_bed_256",
+            displayNameKorean: "쿠션",
+            displayNameEnglish: "Cat Bed",
+            purchasePrice: 250_000,
+            effect: .growthSpeedBonus(percent: 10)
+        ),
+        FurnitureItem(
+            id: "cat_tower_pixelart_256",
+            resourceName: "cat_tower_pixelart_256",
+            displayNameKorean: "캣타워",
+            displayNameEnglish: "Cat Tower",
+            purchasePrice: 250_000,
+            effect: .typingBonusPerHundred(coins: 300)
         ),
     ]
 

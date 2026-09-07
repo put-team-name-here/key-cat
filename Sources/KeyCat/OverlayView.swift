@@ -2029,7 +2029,7 @@ struct OverlayView: View {
         let statusText: String = {
             if isUnlocked { return L10n.text("보유 중인 고양이", "Owned cat") }
             if cat.id == "oddeye" {
-                return L10n.text("당근 수확 시 0.0001% 확률로 획득", "0.0001% chance from harvesting carrots")
+                return L10n.text("당근 수확 시 0.001% 확률로 획득", "0.001% chance from harvesting carrots")
             }
             if cat.id == "cheese" {
                 return L10n.text("당근 수확 시 0.1% 확률로 획득", "0.1% chance from harvesting carrots")
@@ -2038,7 +2038,7 @@ struct OverlayView: View {
                 return L10n.text("양배추 수확 시 0.1% 확률로 획득", "0.1% chance from harvesting cabbages")
             }
             if cat.id == "calico" {
-                return L10n.text("양배추 수확 시 0.0001% 확률로 획득", "0.0001% chance from harvesting cabbages")
+                return L10n.text("양배추 수확 시 0.001% 확률로 획득", "0.001% chance from harvesting cabbages")
             }
             return L10n.text("상점에서 구매할 수 있어요", "Available from the shop")
         }()
